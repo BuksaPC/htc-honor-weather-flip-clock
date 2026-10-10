@@ -1,0 +1,15 @@
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editor
+*.swp
+*~
+
+# Do not commit APKs to git — use GitHub Releases instead
+*.apk
+
+# Secrets
+.env
+.env.*
