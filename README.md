@@ -25,7 +25,7 @@ Installing the old Play/APKMirror package alone does **not** fix this on a curre
 
 ## What this APK fixes (what works now)
 
-This release (**`HTC-WeatherClock-10.10.1059527-android36.apk`**) is built for **today’s Android**:
+This release line (**`HTC-WeatherClock-10.10.1059527-android36-*.apk`**) is built for **today’s Android**:
 
 | Area | Status |
 |------|--------|
@@ -57,8 +57,10 @@ Get the latest APK from **[Releases](https://github.com/neptaligonzalez7-afk/htc
 
 | Release | File | Notes |
 |---------|------|--------|
-| **Latest (Oct 2026)** | `HTC-WeatherClock-10.10.1059527-android36.apk` | Manual city + °F/°C settings |
-| First release | Same filename on tag `v1.0.0` | Flip clock + Open-Meteo baseline |
+| **Latest (Oct 2026)** — tag **`v1.1.0`** | `HTC-WeatherClock-10.10.1059527-android36-v1.1.0.apk` | Manual city + °F/°C settings |
+| First release — tag **`v10.10.1059527-android36`** | `HTC-WeatherClock-10.10.1059527-android36-baseline.apk` | Flip clock + Open-Meteo baseline |
+
+**Naming:** each release APK uses the base name `HTC-WeatherClock-10.10.1059527-android36` plus a suffix: **`-v<TAG>.apk`** (e.g. `-v1.1.0`) or **`-baseline.apk`** for the original Oct 2026 drop. Always pick **Releases → Latest** for the newest build.
 
 **versionCode:** `663091309` · **targetSdk 36**
 
@@ -77,7 +79,7 @@ Get the latest APK from **[Releases](https://github.com/neptaligonzalez7-afk/htc
    - Uninstall any existing **`com.htc.widget.weatherclock`** app (Play, OEM, or older APK), then retry.
    - *(This removes the widget from home screens; add it again after install.)*
 
-Developers: `adb install -r HTC-WeatherClock-10.10.1059527-android36.apk`
+Developers: `adb install -r HTC-WeatherClock-10.10.1059527-android36-v1.1.0.apk`
 
 ## Add the widget
 

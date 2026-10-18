@@ -15,7 +15,7 @@
 
 ### Install
 
-1. Download **`HTC-WeatherClock-10.10.1059527-android36.apk`** from the assets below.
+1. Download **`HTC-WeatherClock-10.10.1059527-android36-baseline.apk`** from the assets below.
 2. Allow installs from unknown sources if prompted.
 3. If install fails, uninstall any older **Weather Clock** app first, then retry.
 4. Add the **4×2 Weather Clock** widget from the widget picker.

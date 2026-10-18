@@ -53,9 +53,11 @@ GitHub will ask you to sign in (browser or personal access token).
 2. **Tag:** `v10.10.1059527-android36`
 3. **Title:** `Weather Clock 10.10.1059527 (Android 36)`
 4. Paste the text from `release-notes-v1.md` in the description.
-5. **Attach binary:** upload this file from your HTC project folder:
+5. **Attach binary:** upload the signed APK using a **distinct filename**, e.g. baseline:
 
-   `c:\Users\ngonz26\Documents\HTC\HTC-WeatherClock-10.10.1059527-android36.apk`
+   `HTC-WeatherClock-10.10.1059527-android36-baseline.apk`
+
+   (Build from `signed\HTC-WeatherClock-aligned-debugSigned.apk` or your release output; rename before upload.)
 
 6. **Publish release**.
 
@@ -70,10 +72,10 @@ winget install GitHub.cli
 gh auth login
 cd "c:\Users\ngonz26\Documents\HTC\github-export\htc-weather-flip-clock"
 gh repo create neptaligonzalez7-afk/htc-weather-flip-clock --public --source=. --remote=origin --push
-gh release create v10.10.1059527-android36 `
-  "c:\Users\ngonz26\Documents\HTC\HTC-WeatherClock-10.10.1059527-android36.apk" `
-  --title "Weather Clock 10.10.1059527 (Android 36)" `
-  --notes-file release-notes-v1.md
+gh release create v1.1.0 `
+  "c:\Users\ngonz26\Documents\HTC\signed\HTC-WeatherClock-aligned-debugSigned.apk#HTC-WeatherClock-10.10.1059527-android36-v1.1.0.apk" `
+  --title "Weather Clock — manual city & °F/°C (Oct 2026)" `
+  --notes-file release-notes-v2.md
 ```
 
 ---
