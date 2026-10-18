@@ -34,16 +34,33 @@ This release (**`HTC-WeatherClock-10.10.1059527-android36.apk`**) is built for *
 | **Flip clock** | **Flip animation runs** — Sense-style digit flips on time changes. |
 | **Time updates** | **Clock keeps time** — updates with system time / refresh paths; **does not stay stuck** like the broken legacy behavior. |
 | **Location / sync** | Bridge layer replaces dead HTC sync with a local weather provider and modern refresh behavior. |
+| **Manual city** | Choose a city in widget settings (list or search/add); selection is persisted for the widget. |
+| **Temperature unit** | Switch **°F** and **°C** in settings; the widget follows your choice. |
 
 Exact layout may vary slightly by launcher and screen size; core clock, flip, and weather strip are what this port restores.
 
+## Widget settings (manual city & °F / °C)
+
+1. Add the **4×2 Weather Clock** widget, then open its **settings** (tap the widget or use the widget’s configure action).
+2. **City**
+   - Tap **Current location** to use GPS weather and local time for where you are.
+   - Or tap any city in the list (e.g. cities you added earlier).
+   - Use **+** / search to find and add a city (e.g. Los Angeles, San Diego), then tap it to select.
+3. **Temperature**
+   - Use the **°F / °C** control in settings. The widget should refresh with the unit you picked.
+
+If a city does not stick after you leave settings, install the **latest release** from GitHub (Oct 2026 build includes persistence and refresh fixes). Uninstall older sideloads of the same app if install or behavior is inconsistent.
+
 ## Download
 
-Get the latest APK from **[Releases](https://github.com/neptaligonzalez7-afk/htc-weather-flip-clock/releases)** (after you publish the first release).
+Get the latest APK from **[Releases](https://github.com/neptaligonzalez7-afk/htc-weather-flip-clock/releases)**.
 
-| File | versionCode |
-|------|-------------|
-| `HTC-WeatherClock-10.10.1059527-android36.apk` | `663091309` |
+| Release | File | Notes |
+|---------|------|--------|
+| **Latest (Oct 2026)** | `HTC-WeatherClock-10.10.1059527-android36.apk` | Manual city + °F/°C settings |
+| First release | Same filename on tag `v1.0.0` | Flip clock + Open-Meteo baseline |
+
+**versionCode:** `663091309` · **targetSdk 36**
 
 ## Requirements
 
@@ -66,7 +83,7 @@ Developers: `adb install -r HTC-WeatherClock-10.10.1059527-android36.apk`
 
 1. Long-press home screen → **Widgets**.
 2. Find **Weather Clock** (HTC) → **4×2**.
-3. Place on home screen and set location / weather if prompted.
+3. Place on home screen, then open **settings** to pick **city** and **°F or °C**.
 
 ## Signing
 
