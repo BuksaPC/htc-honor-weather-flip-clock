@@ -96,3 +96,7 @@ See [LICENSE](./LICENSE). HTC Sense names and assets are trademarks of their res
 ## Reporting issues
 
 Open a **GitHub Issue** with device model, **Android version**, launcher name, and screenshots or a short screen recording.
+
+---
+
+**Support (optional)** — If this widget is useful on your phone, you can [buy me a coffee](https://buymeacoffee.com/neta4457). Thanks for trying it.
