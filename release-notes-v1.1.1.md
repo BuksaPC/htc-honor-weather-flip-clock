@@ -13,7 +13,7 @@
 - Live **Open-Meteo** weather, reliable time updates, **minSdk 24** · **targetSdk 36**.
 
 - **Package:** `com.htc.widget.weatherclock`
-- **versionCode:** `663091310`
+- **versionCode:** `663091310` (superseded by **v1.1.2**)
 - **versionName:** `10.10.1059527-android36-v1.1.1`
 
 ### Install

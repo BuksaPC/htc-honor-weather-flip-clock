@@ -57,13 +57,13 @@ Get the latest APK from **[Releases](https://github.com/neptaligonzalez7-afk/htc
 
 | Release | File | Notes |
 |---------|------|--------|
-| **Latest (Oct 2026)** — tag **`v1.1.1`** | `HTC-WeatherClock-10.10.1059527-android36-v1.1.1.apk` | Flip synced to minute change + v1.1.0 features |
-| Previous — tag **`v1.1.0`** | *(superseded by v1.1.1)* | Manual city + °F/°C settings |
+| **Latest (Oct 2026)** — tag **`v1.1.2`** | `HTC-WeatherClock-10.10.1059527-android36-v1.1.2.apk` | °F/°C for high/low + forecast; v1.1.1 flip timing |
+| Previous — tag **`v1.1.1`** | *(superseded by v1.1.2)* | Flip synced to minute change |
 | First release — tag **`v10.10.1059527-android36`** | `HTC-WeatherClock-10.10.1059527-android36-baseline.apk` | Flip clock + Open-Meteo baseline |
 
 **Naming:** each release APK uses the base name `HTC-WeatherClock-10.10.1059527-android36` plus a suffix: **`-v<TAG>.apk`** (e.g. `-v1.1.0`) or **`-baseline.apk`** for the original Oct 2026 drop. Always pick **Releases → Latest** for the newest build.
 
-**versionCode:** `663091310` · **targetSdk 36**
+**versionCode:** `663091311` · **targetSdk 36**
 
 ## Requirements
 
@@ -80,7 +80,7 @@ Get the latest APK from **[Releases](https://github.com/neptaligonzalez7-afk/htc
    - Uninstall any existing **`com.htc.widget.weatherclock`** app (Play, OEM, or older APK), then retry.
    - *(This removes the widget from home screens; add it again after install.)*
 
-Developers: `adb install -r HTC-WeatherClock-10.10.1059527-android36-v1.1.1.apk`
+Developers: `adb install -r HTC-WeatherClock-10.10.1059527-android36-v1.1.2.apk`
 
 ## Add the widget
 
