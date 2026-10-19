@@ -87,6 +87,25 @@ Developers: `adb install -r HTC-WeatherClock-10.10.1059527-android36-v1.1.0.apk`
 2. Find **Weather Clock** (HTC) → **4×2**.
 3. Place on home screen, then open **settings** to pick **city** and **°F or °C**.
 
+## Flip animation not visible?
+
+There is **no setting in the widget to turn flip animation on or off**. The clock can show the **correct time** while digits **change instantly** — that usually means the flip path did not run, or your **launcher only applied the last widget frame** of a short animation.
+
+The flip is driven by many rapid home-screen widget updates (not the old in-layout `ViewFlipper` animation). It is meant to run when the **screen is on**, the phone is **unlocked**, and the **minute rolls over** while you are on the home screen. On the **lock screen** or **Always On Display**, the widget often **jumps** to the current time when you unlock instead of playing a visible flip.
+
+### Try this
+
+1. Install the **[latest release](https://github.com/neptaligonzalez7-afk/htc-weather-flip-clock/releases/latest)** (`…-v1.1.0.apk` or newer). Old APKMirror / pre-bridge builds often never flip on modern Android.
+2. Use **Weather Clock → 4×2** only. Smaller or alternate clock widgets may not use the same flip layout.
+3. Remove the widget from the home screen and **add it again** after installing.
+4. At **:58**, stay on the **home screen**, **unlocked**, and watch the **minute** digit change at **:00**.
+5. **Samsung / One UI:** **Settings → Battery → Background usage limits** — set this app to **Unrestricted** (or turn off optimization for it). Allow **Alarms & reminders** / exact alarms if Android prompts.
+6. Optional: turn **off** **Remove animations** (Accessibility) and set **Animator duration scale** to **1x** (Developer options). These rarely fix the issue alone but are worth ruling out.
+
+### Still no flip?
+
+Some launchers (including One UI on S24/S25/S26-class devices) **throttle** widget updates. The app may animate internally while the home screen only shows the final digit — it can look like an instant change. If that matches your phone, say so in an issue; device and launcher details help.
+
 ## Signing
 
 APKs are **debug-signed** for sideloading. They are not Play Store builds. Do not install over a differently signed build of the same package without uninstalling first.
@@ -97,7 +116,7 @@ See [LICENSE](./LICENSE). HTC Sense names and assets are trademarks of their res
 
 ## Reporting issues
 
-Open a **GitHub Issue** with device model, **Android version**, launcher name, and screenshots or a short screen recording.
+Open a **GitHub Issue** with device model, **Android version**, **One UI / launcher** name, **APK filename** (from Releases), and a **short screen recording** across a minute change (home screen, unlocked). For flip problems, note whether the **time is correct** but only the **animation** is missing.
 
 ---
 
