@@ -15,7 +15,7 @@
 - **minSdk 24** · **targetSdk 36**
 
 - **Package:** `com.htc.widget.weatherclock`
-- **versionCode:** `663091309` (base APK; bridge/settings patches in this build)
+- **versionCode:** `663091309` (superseded by **v1.1.1** / `663091310`)
 - **versionName:** `10.10.1059527-android36`
 
 ### Install
