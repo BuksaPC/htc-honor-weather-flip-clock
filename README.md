@@ -118,6 +118,6 @@ See [LICENSE](./LICENSE). HTC Sense names and assets are trademarks of their res
 
 Open a **GitHub Issue** with device model, **Android version**, **One UI / launcher** name, **APK filename** (from Releases), and a **short screen recording** across a minute change (home screen, unlocked). For flip problems, note whether the **time is correct** but only the **animation** is missing.
 
----
+## Support (optional)
 
-**Support (optional)** — If this widget is useful on your phone, you can [buy me a coffee](https://buymeacoffee.com/neta4457). Thanks for trying it.
+If this widget is useful on your phone, you can [buy me a coffee](https://buymeacoffee.com/neta4457). Thanks for trying it.
