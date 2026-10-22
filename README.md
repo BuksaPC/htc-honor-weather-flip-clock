@@ -48,22 +48,26 @@ Exact layout may vary slightly by launcher and screen size; core clock, flip, an
    - Use **+** / search to find and add a city (e.g. Los Angeles, San Diego), then tap it to select.
 3. **Temperature**
    - Use the **°F / °C** control in settings. The widget should refresh with the unit you picked.
+4. **Language (v1.1.4+)**
+   - City names, forecast day/date labels, and the widget date line follow **system language** (Open-Meteo geocoding + locale date formats). After changing language in Android settings, weather refreshes automatically.
 
-If a city does not stick after you leave settings, install the **latest release** from GitHub (Oct 2026 build includes persistence and refresh fixes). Uninstall older sideloads of the same app if install or behavior is inconsistent.
+If a city does not stick after you leave settings, install the **latest release** from GitHub. Uninstall older sideloads of the same app if install or behavior is inconsistent.
 
 ## Download
 
 Get the latest APK from **[Releases](https://github.com/neptaligonzalez7-afk/htc-weather-flip-clock/releases)**.
 
-| Release | File | Notes |
-|---------|------|--------|
-| **Latest (Oct 2026)** — tag **`v1.1.2`** | `HTC-WeatherClock-10.10.1059527-android36-v1.1.2.apk` | °F/°C for high/low + forecast; v1.1.1 flip timing |
-| Previous — tag **`v1.1.1`** | *(superseded by v1.1.2)* | Flip synced to minute change |
-| First release — tag **`v10.10.1059527-android36`** | `HTC-WeatherClock-10.10.1059527-android36-baseline.apk` | Flip clock + Open-Meteo baseline |
+| Release | File | versionCode | Notes |
+|---------|------|-------------|--------|
+| **Latest (Oct 2026)** — tag **`v1.2.3`** | `HTC-WeatherClock-10.10.1059527-android36-v1.2.3.apk` | `663091322` | Weather rate-limit + cache; clock catch-up; includes language + battery fixes below |
+| Previous — tag **`v1.1.4`** | `…-v1.1.4.apk` | `663091313` | **System language** for city + forecast labels |
+| Previous — tag **`v1.1.3`** | `…-v1.1.3.apk` | `663091312` | First **battery** background reductions |
+| Previous — tag **`v1.1.2`** | `…-v1.1.2.apk` | `663091311` | °F/°C high/low + forecast |
+| First release — tag **`v10.10.1059527-android36`** | `…-baseline.apk` | `663091309` | Flip clock + Open-Meteo baseline |
 
-**Naming:** each release APK uses the base name `HTC-WeatherClock-10.10.1059527-android36` plus a suffix: **`-v<TAG>.apk`** (e.g. `-v1.1.0`) or **`-baseline.apk`** for the original Oct 2026 drop. Always pick **Releases → Latest** for the newest build.
+**Naming:** base `HTC-WeatherClock-10.10.1059527-android36` + **`-v<TAG>.apk`** or **`-baseline.apk`**. Always pick **Releases → Latest**.
 
-**versionCode:** `663091311` · **targetSdk 36**
+**Latest versionCode:** `663091322` · **targetSdk 36**
 
 ## Requirements
 
@@ -80,13 +84,25 @@ Get the latest APK from **[Releases](https://github.com/neptaligonzalez7-afk/htc
    - Uninstall any existing **`com.htc.widget.weatherclock`** app (Play, OEM, or older APK), then retry.
    - *(This removes the widget from home screens; add it again after install.)*
 
-Developers: `adb install -r HTC-WeatherClock-10.10.1059527-android36-v1.1.2.apk`
+Developers: `adb install -r HTC-WeatherClock-10.10.1059527-android36-v1.2.3.apk`
 
 ## Add the widget
 
 1. Long-press home screen → **Widgets**.
 2. Find **Weather Clock** (HTC) → **4×2**.
 3. Place on home screen, then open **settings** to pick **city** and **°F or °C**.
+
+## Battery / background usage (v1.2.0+)
+
+This port keeps the clock on time with **one alarm per minute while unlocked and interactive** (plus system `TIME_TICK` when the app is in memory). It does **not** wake the phone every 60 seconds while idle on the lock screen or in doze.
+
+- **Screen off / locked** — flip minute alarms and the in-app timer loop stop; time **catches up** when you turn the screen on or unlock.
+- **Fixed city** — no live GPS seeding or motion location watches; much lower overnight drain than early Open-Meteo builds.
+- **Current location / travel** — network and fused fixes only; passive motion hints (no continuous GPS fixes for routine widget reads).
+- **Weather** — sync is throttled (about **20–30 minutes** between automatic refreshes); Open-Meteo calls are spaced to avoid rate limits.
+- **No widget on home screen** — pending alarms and jobs are cancelled.
+
+On Samsung **Settings → Battery**, if you previously set this app to **Unrestricted** only for flip timing, you can try **Optimized** again on **v1.2.0+** and confirm the clock still flips on the home screen when unlocked.
 
 ## Flip animation not visible?
 
@@ -96,7 +112,7 @@ The flip is driven by many rapid home-screen widget updates (not the old in-layo
 
 ### Try this
 
-1. Install the **[latest release](https://github.com/neptaligonzalez7-afk/htc-weather-flip-clock/releases/latest)** (`…-v1.1.0.apk` or newer). Old APKMirror / pre-bridge builds often never flip on modern Android.
+1. Install the **[latest release](https://github.com/neptaligonzalez7-afk/htc-weather-flip-clock/releases/latest)** (`…-v1.2.3.apk` or newer). Old APKMirror / pre-bridge builds often never flip on modern Android.
 2. Use **Weather Clock → 4×2** only. Smaller or alternate clock widgets may not use the same flip layout.
 3. Remove the widget from the home screen and **add it again** after installing.
 4. At **:58**, stay on the **home screen**, **unlocked**, and watch the **minute** digit change at **:00**.
