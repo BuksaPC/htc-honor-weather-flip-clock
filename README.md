@@ -1,140 +1,169 @@
-# HTC Sense Weather Flip Clock (Android)
+# HTC Weather Clock: Honor Weather edition
 
-Home-screen **4×2 flip clock** widget in the classic **HTC Sense** style, rebuilt for **modern Android**. Weather uses **Open-Meteo** (no AccuWeather or HTC weather account required).
+A patch for the community **HTC Weather Clock** widget mod (`HTC-WeatherClock-10.10.1059527-android36-v1.2.3.apk`) that makes the widget follow **Honor Weather**, the phone's built-in weather app, instead of its own Open-Meteo data.
 
-> **Not affiliated with HTC.** Community port for phones where the original widget no longer works correctly.
+The widget shows the same current temperature, daily high/low and condition as Honor Weather, and tapping it opens Honor Weather.
 
-## Screenshots
+| | |
+|---|---|
+| **Tested on** | Honor MBH-N49, Android 16, Honor Weather (`com.hihonor.android.totemweather`) 18.1.6.357 |
+| **Base APK** | HTC Weather Clock mod v1.2.3 (Open-Meteo backend), by a third party |
+| **Root** | Not needed. One adb command, run once. |
 
-| Home screen | Flip animation |
-|-------------|----------------|
-| ![Widget on home screen](./screenshots/home-widget.jpg) | [Watch flip demo (MP4)](./screenshots/flip-animation.mp4) |
+---
 
-Location name is blurred for privacy in these media files.
+## Features
 
-## What was broken (original APK / old port)
+- **Honor Weather data on the HTC widget**
+  - Current temperature (°C and °F)
+  - Today's high/low
+  - Condition (clear, cloudy, rain, snow, storm, fog…) mapped to the HTC widget's own animated icons
+- **Day/night icons from real sunrise and sunset.** The sun turns into the moon at your city's actual sunset, not at a fixed hour.
+- **Tapping the weather area or the city name opens Honor Weather.** Before, it opened the AccuWeather/Open-Meteo web page.
+- **Stays in sync:** the widget re-reads Honor Weather every 10 minutes while the screen is on.
+- **Battery friendly:** no extra wake-ups, no GPS, no sensors, and no network use for Honor data.
+- **Everything else is unchanged:** the HTC flip clock, date, city name, themes and settings work as before.
 
-On **recent Android versions** (including current **Android 15 / 16**–class builds on devices like Samsung S24/S25/S26 Ultra), the classic **HTC Weather Clock** often:
+## How it works
 
-- **Weather blank or stuck** — legacy **AccuWeather / HTC weather** backends are gone or blocked; the strip never updates.
-- **Time stops updating** — digits freeze on old minutes or hours until you force-remove the widget.
-- **No flip animation** — digits swap instantly or not at all; the Sense flip effect is lost.
-- **Widget crashes or fails to load** — older builds target outdated APIs and break under stricter background and network rules.
+Honor Weather keeps its data behind a system-only permission (`ACCESS_WEATHERCLOCK_PROVIDER`, `signature|privileged`), so normal apps can't query it. Honor's **lock-screen widgets**, however, are ordinary `RemoteViews` built inside Honor's own process.
 
-Installing the old Play/APKMirror package alone does **not** fix this on a current phone.
+1. The mod hosts Honor's 2×1 lock-screen widget
+   (`.widget.keyguardwidget.CurrentWeather2x1KeyGuardWidgetWeatherProvider`) in a private, invisible `AppWidgetHost`.
+2. It inflates the widget off-screen and reads its two text fields:
+   - `tv_title`, e.g. `16°Sunny`
+   - `tv_content`, e.g. `10°/19°`
+3. The condition text is matched against Honor's own `weather_description_ex` string array, in the phone's language. Its index is an AccuWeather icon code, the same code set the HTC widget uses.
+4. These values overwrite the stored weather rows. The HTC widget then draws them as if they came from its own backend.
+5. Open-Meteo is still fetched every 3 hours, but only for sunrise/sunset times and the forecast-day structure the HTC library expects. If Honor's data can't be read, the widget falls back to Open-Meteo.
 
-## What this APK fixes (what works now)
+```
+Honor Weather ──► Honor lock-screen widget (RemoteViews)
+                          │  hosted invisibly
+                          ▼
+              HonorWeather.read()  ──►  "16°Sunny" / "10°/19°"
+                          │
+                          ▼
+   stored weather rows (temp, high/low, condition, lastUpdate)
+                          │
+                          ▼
+                HTC Weather Clock widget
+```
 
-This release line (**`HTC-WeatherClock-10.10.1059527-android36-*.apk`**) is built for **today’s Android**:
+## Installation
 
-| Area | Status |
-|------|--------|
-| **Latest Android compatibility** | **minSdk 24**, **targetSdk 36** — intended for current flagship / stock Android versions, not just old ROMs. |
-| **Weather** | **Works** via **Open-Meteo** (current conditions + forecast data wired into the widget). |
-| **Flip clock** | **Flip animation runs** — Sense-style digit flips on time changes. |
-| **Time updates** | **Clock keeps time** — updates with system time / refresh paths; **does not stay stuck** like the broken legacy behavior. |
-| **Location / sync** | Bridge layer replaces dead HTC sync with a local weather provider and modern refresh behavior. |
-| **Manual city** | Choose a city in widget settings (list or search/add); selection is persisted for the widget. |
-| **Temperature unit** | Switch **°F** and **°C** in settings; the widget follows your choice. |
+1. Download `HTC-WeatherClock-v1.2.3-honor.apk`.
+2. Install it. It's signed with the same key as the original mod, so it installs over an existing copy and keeps your widgets:
+   ```sh
+   adb install -r HTC-WeatherClock-v1.2.3-honor.apk
+   ```
+3. **Required once:** allow the widget to host Honor's widget.
+   ```sh
+   adb shell appwidget grantbind --package com.htc.widget.weatherclock --user 0
+   ```
+   Without this, the widget quietly keeps showing Open-Meteo data. The grant survives updates and reboots. Run it again after a fresh install or after clearing the app's data.
+4. Make sure Honor Weather has a city, or has Location turned on. The widget mirrors whatever Honor's lock-screen weather shows.
 
-Exact layout may vary slightly by launcher and screen size; core clock, flip, and weather strip are what this port restores.
+### Checking that it works
 
-## Widget settings (manual city & °F / °C)
+The widget keeps a small status log:
 
-1. Add the **4×2 Weather Clock** widget, then open its **settings** (tap the widget or use the widget’s configure action).
-2. **City**
-   - Tap **Current location** to use GPS weather and local time for where you are.
-   - Or tap any city in the list (e.g. cities you added earlier).
-   - Use **+** / search to find and add a city (e.g. Los Angeles, San Diego), then tap it to select.
-3. **Temperature**
-   - Use the **°F / °C** control in settings. The widget should refresh with the unit you picked.
-4. **Language (v1.1.4+)**
-   - City names, forecast day/date labels, and the widget date line follow **system language** (Open-Meteo geocoding + locale date formats). After changing language in Android settings, weather refreshes automatically.
+```sh
+adb shell cat /sdcard/Android/data/com.htc.widget.weatherclock/files/honor_weather.txt
+```
 
-If a city does not stick after you leave settings, install the **latest release** from GitHub. Uninstall older sideloads of the same app if install or behavior is inconsistent.
+A working setup looks like this:
 
-## Download
+```
+Fri Oct 23 13:31:02 GMT+02:00 2026 Honor: 17°Sunny / 10°/19° -> code 1 day
+```
 
-Get the latest APK from **[Releases](https://github.com/neptaligonzalez7-afk/htc-weather-flip-clock/releases)**.
+A line is written only when the weather changes or something fails. If something fails, the line says why, for example `no Honor data, kept Open-Meteo (bind failed)`. That one means step 3 was skipped.
 
-| Release | File | versionCode | Notes |
-|---------|------|-------------|--------|
-| **Latest (Oct 2026)** — tag **`v1.2.3`** | `HTC-WeatherClock-10.10.1059527-android36-v1.2.3.apk` | `663091322` | Weather rate-limit + cache; clock catch-up; includes language + battery fixes below |
-| Previous — tag **`v1.1.4`** | `…-v1.1.4.apk` | `663091313` | **System language** for city + forecast labels |
-| Previous — tag **`v1.1.3`** | `…-v1.1.3.apk` | `663091312` | First **battery** background reductions |
-| Previous — tag **`v1.1.2`** | `…-v1.1.2.apk` | `663091311` | °F/°C high/low + forecast |
-| First release — tag **`v10.10.1059527-android36`** | `…-baseline.apk` | `663091309` | Flip clock + Open-Meteo baseline |
+---
 
-**Naming:** base `HTC-WeatherClock-10.10.1059527-android36` + **`-v<TAG>.apk`** or **`-baseline.apk`**. Always pick **Releases → Latest**.
+## Changes in detail
 
-**Latest versionCode:** `663091322` · **targetSdk 36**
+### 1. Tap opens Honor Weather
 
-## Requirements
+| File | Change |
+|---|---|
+| `smali/.../util/WeatherBase.smali` | `getWeatherClickIntent` and `setSettingClick` wrap their intents with `PhoneWeather.getIntent()` |
+| `smali_classes2/.../openmeteo/PhoneWeather.smali` (new) | Builds a trampoline intent to `CalendarTapActivity`. `launch()` starts `com.hihonor.android.totemweather/.WeatherHome`, then the Huawei equivalent, then the original intent as a fallback |
+| `smali_classes2/.../openmeteo/CalendarTapActivity.smali` | In `onCreate`, recognises the `PHONE_WEATHER` action, calls `PhoneWeather.launch()` and finishes |
 
-- Android **7.0+** (API 24) through **current Android** (this build targets **API 36**)
-- Internet for weather sync
-- Location permission optional (for automatic local weather)
+### 2. Package visibility (Android 11+)
 
-## Install
+| File | Change |
+|---|---|
+| `AndroidManifest.xml` (binary) | The unused `<queries>` entry `com.samsung.android.calendar` was rewritten to `com.hihonor.android.totemweather` by editing the binary XML string pool directly. Without this entry the app can't see Honor Weather at all |
 
-1. Download the latest release APK from **Releases**.
-2. On the phone: allow **Install unknown apps** for your browser or Files app.
-3. Open the APK and install.
-4. If install fails with **“App not installed”** or **signature conflict**:
-   - Uninstall any existing **`com.htc.widget.weatherclock`** app (Play, OEM, or older APK), then retry.
-   - *(This removes the widget from home screens; add it again after install.)*
+### 3. Honor Weather data bridge
 
-Developers: `adb install -r HTC-WeatherClock-10.10.1059527-android36-v1.2.3.apk`
+| File | Change |
+|---|---|
+| `honorbridge/src/.../HonorWeather.java` (new, compiled to `classes3.dex`) | Hosts and reads Honor's lock-screen widget. Maps conditions to AccuWeather codes, picks day/night from sunrise/sunset, and writes the current temp, high/low, condition, `dayLightFlag` and `lastUpdate` |
+| `smali_classes2/.../openmeteo/OpenMeteoBridge.smali` | **`refreshForLocation`:** the Open-Meteo result is passed through `HonorWeather.overlay()` before it's stored |
+| | **`syncAllLocked`:** calls the new `honorOverlayStored()` on every sync |
+| | **New `honorOverlayStored()`:** every 3 h, refreshes all location rows from Open-Meteo. On every sync, applies Honor's data to the stored rows and saves them |
 
-## Add the widget
+### 4. Problems fixed along the way
 
-1. Long-press home screen → **Widgets**.
-2. Find **Weather Clock** (HTC) → **4×2**.
-3. Place on home screen, then open **settings** to pick **city** and **°F or °C**.
+- **The widget showed the hourly forecast instead of current weather.** The HTC weather library ignores the `cur*` fields once `lastUpdate` is overdue. The bridge now sets `lastUpdate` when it applies fresh Honor data.
+- **The city never refreshed.** Cities added through the HTC city picker (`app=com.htc.elroy.Weather`) are skipped by the mod's sync. The 3-hourly refresh in `honorOverlayStored()` covers every row.
+- **The moon showed at midday.** The stored `dayLightFlag` came from the last fetch, which ran at night. Day/night is now computed from today's `fstSunrise`/`fstSunset`, which are stored as HHMM integers such as `728`.
+- **Honor's text contains invisible characters.** Numbers are wrapped in Unicode bidi marks (U+202A/U+202C). These are stripped before parsing.
 
-## Battery / background usage (v1.2.0+)
+### 5. Sync timing and battery
 
-This port keeps the clock on time with **one alarm per minute while unlocked and interactive** (plus system `TIME_TICK` when the app is in memory). It does **not** wake the phone every 60 seconds while idle on the lock screen or in doze.
+| Item | Before | After |
+|---|---|---|
+| Weather sync interval while the screen is on (`FlipClockTicker.maybeRefreshWeather`) | 30 min | 10 min |
+| `requestSync` throttle (`OpenMeteoBridge.requestSync`) | 20 min | 10 min |
+| Flip-clock minute alarm (`FlipClockTicker.armAlarms`) | `RTC_WAKEUP` | `RTC`, so it never wakes a sleeping phone |
+| Open-Meteo downloads | mod's own sync, which skipped picker cities | every 3 h, all cities |
+The bridge itself is also light: it reads Honor's widget at most once a minute (the result is cached for 60 s), retries at most 3 times while a freshly bound widget is still empty, and writes its status log only when the message changes.
 
-- **Screen off / locked** — flip minute alarms and the in-app timer loop stop; time **catches up** when you turn the screen on or unlock.
-- **Fixed city** — no live GPS seeding or motion location watches; much lower overnight drain than early Open-Meteo builds.
-- **Current location / travel** — network and fused fixes only; passive motion hints (no continuous GPS fixes for routine widget reads).
-- **Weather** — sync is throttled (about **20–30 minutes** between automatic refreshes); Open-Meteo calls are spaced to avoid rate limits.
-- **No widget on home screen** — pending alarms and jobs are cancelled.
+Syncs only run while the screen is on. After the phone has been locked for a while, the widget catches up within 10 minutes of unlocking. Reading Honor's data happens entirely on the device.
 
-On Samsung **Settings → Battery**, if you previously set this app to **Unrestricted** only for flip timing, you can try **Optimized** again on **v1.2.0+** and confirm the clock still flips on the home screen when unlocked.
+---
 
-## Flip animation not visible?
+## Building from source
 
-There is **no setting in the widget to turn flip animation on or off**. The clock can show the **correct time** while digits **change instantly** — that usually means the flip path did not run, or your **launcher only applied the last widget frame** of a short animation.
+Requirements: JDK 11+, the Android SDK (build-tools 36.0.0, platform `android-36`), and Python 3 if you plan to edit the binary manifest again.
 
-The flip is driven by many rapid home-screen widget updates (not the old in-layout `ViewFlipper` animation). It is meant to run when the **screen is on**, the phone is **unlocked**, and the **minute rolls over** while you are on the home screen. On the **lock screen** or **Always On Display**, the widget often **jumps** to the current time when you unlock instead of playing a visible flip.
+```
+work/
+├── apktool-project/   # base APK decoded with `apktool d -r` (resources kept raw)
+├── honorbridge/src/   # HonorWeather.java
+├── tools/             # apktool 2.12.1 (apktool.jar), uber-apk-signer 1.3.0 (signer.jar)
+└── build.sh
+```
 
-### Try this
+```sh
+./build.sh
+# → ../HTC-WeatherClock-v1.2.3-honor.apk
+```
 
-1. Install the **[latest release](https://github.com/neptaligonzalez7-afk/htc-weather-flip-clock/releases/latest)** (`…-v1.2.3.apk` or newer). Old APKMirror / pre-bridge builds often never flip on modern Android.
-2. Use **Weather Clock → 4×2** only. Smaller or alternate clock widgets may not use the same flip layout.
-3. Remove the widget from the home screen and **add it again** after installing.
-4. At **:58**, stay on the **home screen**, **unlocked**, and watch the **minute** digit change at **:00**.
-5. **Samsung / One UI:** **Settings → Battery → Background usage limits** — set this app to **Unrestricted** (or turn off optimization for it). Allow **Alarms & reminders** / exact alarms if Android prompts.
-6. Optional: turn **off** **Remove animations** (Accessibility) and set **Animator duration scale** to **1x** (Developer options). These rarely fix the issue alone but are worth ruling out.
+`build.sh` does the following:
+1. Compiles `HonorWeather.java` with `javac` and converts it to dex with `d8`.
+2. Rebuilds the smali with `apktool b`.
+3. Adds the dex as `classes3.dex`.
+4. Zipaligns and signs the APK with uber-apk-signer's default debug key, the same key as the original mod.
 
-### Still no flip?
+> The base APK's resources can't be recompiled with aapt2, so the project is decoded with `-r` and resources and the manifest stay binary. Manifest changes have to be made at the binary (AXML) level.
 
-Some launchers (including One UI on S24/S25/S26-class devices) **throttle** widget updates. The app may animate internally while the home screen only shows the final digit — it can look like an instant change. If that matches your phone, say so in an issue; device and launcher details help.
+## Limitations
 
-## Signing
+- **No forecast from Honor.** Honor's lock-screen widgets only expose current conditions and today's high/low. Any forecast days would still come from Open-Meteo, but this widget layout doesn't show them.
+- **Honor's location only.** The widget mirrors whatever city Honor Weather's lock-screen widget uses.
+- **Tested only on Honor devices.** Other phones fall back to the original Open-Meteo behaviour.
+- **The `grantbind` step needs adb once.** Android only shows a bind-permission dialog for home-screen widgets. Honor's lock-screen widget can only be authorised over adb.
 
-APKs are **debug-signed** for sideloading. They are not Play Store builds. Do not install over a differently signed build of the same package without uninstalling first.
+## Credits
 
-## License
+- The original HTC Weather Clock widget belongs to HTC.
+- The Open-Meteo port (v1.2.3) is by its respective modder.
+- Weather data comes from Honor Weather (AccuWeather) and [Open-Meteo](https://open-meteo.com).
 
-See [LICENSE](./LICENSE). HTC Sense names and assets are trademarks of their respective owners.
-
-## Reporting issues
-
-Open a **GitHub Issue** with device model, **Android version**, **One UI / launcher** name, **APK filename** (from Releases), and a **short screen recording** across a minute change (home screen, unlocked). For flip problems, note whether the **time is correct** but only the **animation** is missing.
-
-## Support (optional)
-
-If this widget is useful on your phone, you can [buy me a coffee](https://buymeacoffee.com/neta4457). Thanks for trying it.
+This is an unofficial modification for personal use. It isn't affiliated with HTC or Honor.
