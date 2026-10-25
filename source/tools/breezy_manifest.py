@@ -34,7 +34,7 @@ for i in a.find('receiver', name=OPENMETEO + 'WeatherMotion$Receiver'):
 
 # Package visibility for Breezy (the Honor edition's entry), and the version name.
 rename('com.hihonor.android.totemweather', 'org.breezyweather')
-rename('10.10.1059527-android36-v1.2.4', '10.10.1059527-android36-v1.2.5-breezy')
+rename('10.10.1059527-android36-v1.2.4', '10.10.1059527-android36-v1.2.6-breezy')
 
 perm = a.element('uses-permission', [('name', 'org.breezyweather.READ_PROVIDER')])
 last = a.find('uses-permission')[-1]

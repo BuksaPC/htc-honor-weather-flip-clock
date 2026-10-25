@@ -6,7 +6,7 @@ It works on any phone with **Android 7.0 or newer**.
 
 | | |
 |---|---|
-| **Output** | `HTC-WeatherClock-v1.2.5-breezy.apk` (version `10.10.1059527-android36-v1.2.5-breezy`) |
+| **Output** | `HTC-WeatherClock-v1.2.6-breezy.apk` (version `10.10.1059527-android36-v1.2.6-breezy`) |
 | **Needs** | Breezy Weather 6.x ([F-Droid](https://f-droid.org/packages/org.breezyweather/) or [GitHub](https://github.com/breezy-weather/breezy-weather/releases)) |
 | **Root / adb** | Not needed |
 | **Network** | The widget has **no internet permission**. Breezy does the fetching |
@@ -72,6 +72,12 @@ Breezy's current weather code is used when it's a known code and Breezy's data i
 
 `Sun.at` is the NOAA/Wikipedia sunrise equation. Its day number must be a whole day: the local date at 12:00 UTC. v1.2.4 used the instant of local noon instead, which moved sunrise and sunset by the UTC offset. Near UTC+1 that's about an hour; in India (UTC+5:30) sunset came out at 12:13, so the widget showed night icons and night animations from noon. Checked against real times for Delhi, New York, Sydney, Tokyo, Kiribati (UTC+14) and Tromsø.
 
+### Sunrise and sunset strings (fixed in v1.2.6)
+
+HTC's library doesn't take the current condition code as is. `WeatherData.getCurrentDataStatus` works out day or night itself, from the current time in the city's time zone and today's `fstSunrise`/`fstSunset`, and converts the code to its day or night version (`convertConditionID`). It only reads times like `7:25 AM`. Up to v1.2.5 the widget wrote `725`, which it couldn't parse, so it used 6:00 AM–6:00 PM. Between 6 AM and sunrise, and between sunset and 6 PM, the widget then showed the wrong icon and text, e.g. "Sunny" at 6:35 AM before dawn, while the tap (which uses the widget's own sunrise) played the night scene.
+
+The times are now written as `h:mm AM/PM` in `Locale.US`, whatever the phone's language or 12/24-hour setting; they are never shown. The 12 o'clock hours are written as 0 (`0:40 PM`), because `convertHourMinute` adds 12 to every PM hour.
+
 ### Animation placement
 
 The Sense 3 scenes (588×818) were made for a phone-width screen with the clock at the top; the widget's weather icon sits at about 50% / 47% of the scene.
@@ -114,7 +120,7 @@ To build it yourself:
    ```
 4. **Build:**
    ```sh
-   ./build-breezy.sh      # → ../HTC-WeatherClock-v1.2.5-breezy.apk
+   ./build-breezy.sh      # → ../HTC-WeatherClock-v1.2.6-breezy.apk
    ```
    `breezybridge/src` is compiled into `classes3.dex`. `breezybridge/stubs` are compile-only stand-ins for the smali classes the Java code calls; they aren't dexed. The APK is signed with uber-apk-signer's debug key, the same key as the earlier builds, so it installs over them.
 

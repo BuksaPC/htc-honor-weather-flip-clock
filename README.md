@@ -7,7 +7,7 @@ The classic **HTC Sense flip clock and weather widget** for modern Android, with
 
 | | |
 |---|---|
-| **Latest release** | **v1.2.5-breezy**: `HTC-WeatherClock-10.10.1059527-android36-v1.2.5-breezy.apk` ([Releases](https://github.com/BuksaPC/htc-honor-weather-flip-clock/releases)) |
+| **Latest release** | **v1.2.6-breezy**: `HTC-WeatherClock-10.10.1059527-android36-v1.2.6-breezy.apk` ([Releases](https://github.com/BuksaPC/htc-honor-weather-flip-clock/releases)) |
 | **Needs** | Android 7.0+ and Breezy Weather ([F-Droid](https://f-droid.org/packages/org.breezyweather/) or [GitHub](https://github.com/breezy-weather/breezy-weather/releases)) |
 | **Root / adb** | Not needed |
 | **Internet permission** | None. Breezy fetches the weather; the widget only reads what Breezy shares on the phone |
@@ -63,7 +63,13 @@ Updating from the **Honor edition** (v1.2.3-honor)? Install over it. The `adb ap
 - **Light on battery:** no GPS, no network, no wake-ups. Reading Breezy is a local query, and the widget process starts in under 0.1 s. Measured over 25 h: about 4 mAh in total (≈ 0.07% of a 5,820 mAh battery), 11.6 s of CPU and 0 wake-up alarms. See [BREEZY.md](BREEZY.md#battery).
 - **Unchanged:** the HTC flip clock, date line, calendar events and themes.
 
-## What's new in v1.2.5-breezy
+## What's new in v1.2.6-breezy
+
+See [release-notes-v1.2.6-breezy.md](release-notes-v1.2.6-breezy.md). In short:
+
+- **Fixed the wrong icon around sunrise and sunset.** Between 6 AM and sunrise, and between sunset and 6 PM, the widget could show the day icon and text ("Sunny") at night, or the night ones during the day, while the animation was right. HTC's code couldn't read the sunrise/sunset times the widget gave it and assumed 6 AM–6 PM.
+
+## v1.2.5-breezy
 
 See [release-notes-v1.2.5-breezy.md](release-notes-v1.2.5-breezy.md). In short:
 
@@ -97,7 +103,7 @@ Check that Breezy itself has fresh data, and that its background updates are on.
 Not yet. It's on the list.
 
 **The animation shows night during the day, or sunshine while it rains.**
-Update to v1.2.5-breezy, which fixes both. If it still happens, send `breezy_status.txt` (below). Each sync line shows the code Breezy sent, e.g. `code 7 (Breezy cloudy day)`.
+Update to v1.2.6-breezy: v1.2.5 fixed the animations, and v1.2.6 fixes the widget icon around sunrise and sunset. If it still happens, send `breezy_status.txt` (below). Each sync line shows the code Breezy sent, e.g. `code 7 (Breezy cloudy day)`.
 
 **Where are the logs?**
 `Android/data/com.htc.widget.weatherclock/files/breezy_status.txt` on the phone. It records syncs ("synced 1 rows from Breezy: London, 8°C, 15°/7° code 35"), weather taps and errors. Some phones, Honor for example, hide app logs from `adb logcat`.
@@ -112,6 +118,7 @@ Full technical write-up: **[BREEZY.md](BREEZY.md)** (Breezy edition) and **[ANIM
 
 ## Previous releases
 
+- **v1.2.5-breezy:** day/night and animation fixes. Superseded by v1.2.6-breezy (icon around sunrise and sunset).
 - **v1.2.4-breezy:** first Breezy edition. Superseded by v1.2.5-breezy (day/night and animation fixes).
 - **v1.2.3-honor:** weather read from Honor Weather's lock-screen widget (Honor phones only, needed `adb appwidget grantbind`). Superseded by the Breezy edition.
 - **v1.2.3 and earlier:** Open-Meteo weather. See the `release-notes-*.md` files.

@@ -620,11 +620,16 @@ public final class BreezyWeather {
             return t >= rise && t < set;
         }
 
-        /** HHMM as the HTC library stores it, e.g. 728 for 07:28. */
+        /**
+         * "7:28 AM", the format both HTC parsers expect (WeatherData.convertHourMinute, DayNight.getSunTime).
+         * Anything else makes the library fall back to 6 AM-6 PM and flip the current code to day or night by that.
+         * The 12 o'clock hours are written as 0 ("0:40 PM"): convertHourMinute adds 12 to every PM hour.
+         */
         String hhmm(long t) {
             Calendar c = Calendar.getInstance(tz);
             c.setTimeInMillis(t);
-            return String.valueOf(c.get(Calendar.HOUR_OF_DAY) * 100 + c.get(Calendar.MINUTE));
+            return String.format(Locale.US, "%d:%02d %s", c.get(Calendar.HOUR), c.get(Calendar.MINUTE),
+                    c.get(Calendar.AM_PM) == Calendar.AM ? "AM" : "PM");
         }
 
         /** For the local date containing time t at (lat, lon); polar day/night fall back to 06:00/18:00. */
