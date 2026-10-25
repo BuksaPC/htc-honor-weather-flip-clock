@@ -1,191 +1,108 @@
-# HTC Weather Clock: Honor Weather edition
+# HTC Weather Flip Clock: Breezy Weather edition
 
-A patch for the community **HTC Weather Clock** widget mod (`HTC-WeatherClock-10.10.1059527-android36-v1.2.3.apk`) that makes the widget follow **Honor Weather**, the phone's built-in weather app, instead of its own Open-Meteo data.
+The classic **HTC Sense flip clock and weather widget** for modern Android, with:
 
-The widget shows the same current temperature, daily high/low and condition as Honor Weather. Tapping the weather plays the original **HTC Sense 3 full-screen weather animation** over the home screen, and tapping again opens Honor Weather.
+- weather from **[Breezy Weather](https://github.com/breezy-weather/breezy-weather)** (free and open source, 50+ weather sources), so it works on **any phone**;
+- the original **HTC Sense 3 full-screen weather animations**, played smoothly at 60/90/120 Hz.
 
 | | |
 |---|---|
-| **Tested on** | Honor MBH-N49, Android 16, Honor Weather (`com.hihonor.android.totemweather`) 18.1.6.357 |
-| **Base APK** | HTC Weather Clock mod v1.2.3 (Open-Meteo backend), by a third party |
-| **Root** | Not needed. One adb command, run once. |
+| **Latest release** | **v1.2.4-breezy**: `HTC-WeatherClock-10.10.1059527-android36-v1.2.4-breezy.apk` ([Releases](https://github.com/BuksaPC/htc-honor-weather-flip-clock/releases)) |
+| **Needs** | Android 7.0+ and Breezy Weather ([F-Droid](https://f-droid.org/packages/org.breezyweather/) or [GitHub](https://github.com/breezy-weather/breezy-weather/releases)) |
+| **Root / adb** | Not needed |
+| **Internet permission** | None. Breezy fetches the weather; the widget only reads what Breezy shares on the phone |
+| **Tested on** | Honor MBH-N49 (foldable), Android 16, Breezy Weather 6.2.2 |
 
 ---
+
+## Install
+
+1. **Install Breezy Weather** from [F-Droid](https://f-droid.org/packages/org.breezyweather/) or [GitHub](https://github.com/breezy-weather/breezy-weather/releases). Open it and add your city, or let it use your current location.
+2. **Install the widget APK** from [Releases](https://github.com/BuksaPC/htc-honor-weather-flip-clock/releases).
+   - It's signed with the same key as the earlier builds here, so it installs over them and keeps your widgets.
+   - If Android reports a signature conflict, uninstall the old widget first.
+3. **Add the widget** to your home screen. Its settings screen opens: tap **Set up** and allow **Weather Clock Widget** to get weather information from Breezy Weather.
+   - If you skip this, the widget's info bar says what's missing ("Tap to install Breezy Weather", "Tap to allow Breezy Weather"…). Tapping it brings the setup back.
+4. **Recommended: instant updates.** In Breezy, open **Settings → External modules → Data sharing → Send Breezy Weather Location Update Notifier data** and turn on **Weather Clock Widget**. The widget then updates the moment Breezy refreshes, or when you add, reorder or remove a location.
+5. **Optional:** **Settings → Apps → Alarms & reminders → Allow**, for exact flip-clock minute ticks.
+
+Updating from the **Honor edition** (v1.2.3-honor)? Install over it. The `adb appwidget grantbind` step is no longer needed.
+
+## Using it
+
+| Tap | Does |
+|---|---|
+| **Weather icon** | Plays the HTC Sense 3 animation for the current weather. Tap again to open Breezy. |
+| **Temperature** (or high/low) | Opens Breezy Weather directly |
+| **City name** | Opens the widget settings |
+| **Clock** | Opens your alarm clock |
+
+**Location.** The widget shows Breezy's current-location entry if it has one, otherwise the **first location in Breezy's list**. Change it in Breezy, and the widget follows.
+
+**Refresh rate.** The widget follows Breezy: set it in **Breezy → Settings → Background updates**. With data sharing on, updates are instant. Without it, the widget re-reads Breezy every 10 minutes while the screen is on.
+
+**High/low.** Today's daytime high, and the low of the night you're in (last night before sunrise, tonight after). It's the same pair Breezy shows in its header, e.g. "Night: 7° • Day: 15°".
+
+### Widget settings
+
+| Setting | |
+|---|---|
+| Weather source | Breezy status (city, temperature, high/low, last update), plus **Open Breezy** and **Breezy settings** |
+| Temperature | °C or °F |
+| Show the feels-like temperature | Shows Breezy's feels-like value, labelled **"Feels like"** on the widget |
+| Tapping the weather | Play the Sense animation, or open Breezy |
+| Animation sound | HTC's weather sounds, only when the ringer is on |
 
 ## Features
 
-- **Honor Weather data on the HTC widget**
-  - Current temperature (°C and °F)
-  - Today's high/low
-  - Condition (clear, cloudy, rain, snow, storm, fog…) mapped to the HTC widget's own animated icons
-- **Day/night icons from real sunrise and sunset.** The sun turns into the moon at your city's actual sunset, not at a fixed hour.
-- **HTC Sense 3 weather animations, at 60/90/120 Hz.** Tapping the weather plays the condition's original Sense 3 scene (clouds rolling over the clock, rain on the glass with the wiper, sun flare, snow, fog, lightning, the moon at night…) with HTC's weather sound. A tap during the animation opens Honor Weather; otherwise it fades out after 6–8 s.
-- **The city name opens Honor Weather directly.** Before, taps opened the AccuWeather/Open-Meteo web page.
-- **Stays in sync:** the widget re-reads Honor Weather every 10 minutes while the screen is on.
-- **Battery friendly:** no extra wake-ups, no GPS, no sensors, and no network use for Honor data.
-- **Everything else is unchanged:** the HTC flip clock, date, city name, themes and settings work as before.
+- **Breezy Weather data:** current temperature and condition, feels-like temperature, humidity, wind, a 7-day day/night forecast and a 12-hour forecast. Breezy's codes are mapped to the HTC icons.
+- **Day/night icons** from real sunrise and sunset, calculated on the phone for your location.
+- **HTC Sense 3 weather animations:** 44 original scenes (sun and flare, clouds rolling over the clock, rain on the glass with the wiper, storms, snow, fog, wind, hot, cold, the moon at night…), drawn over your home screen with HTC's sounds. HTC's 32-bit Mode10 engine can't run on today's phones, so the scene files were reverse-engineered and are played by a new renderer. See **[ANIMATIONS.md](ANIMATIONS.md)**.
+- **Light on battery:** no GPS, no network, no wake-ups. Reading Breezy is a local query, and the widget process starts in about 0.03 s.
+- **Unchanged:** the HTC flip clock, date line, calendar events and themes.
+
+## What's new in v1.2.4-breezy
+
+See [release-notes-v1.2.4-breezy.md](release-notes-v1.2.4-breezy.md). In short:
+
+- **Weather from Breezy Weather.** The Open-Meteo and Honor backends are removed: no GPS, no geocoding services, no internet permission. That fixes "city search doesn't find my city" and "automatic location doesn't work" on Xiaomi, LineageOS and other phones.
+- **New settings screen** in place of the old city picker. Units, feels-like, tap action, animation sound.
+- **The animation always matches the widget.** Before, it could play sunshine while the widget showed rain, on every non-Honor phone.
+- **Tapping the temperature** opens Breezy without the animation.
+- **Fixed a 20–40 s startup freeze** ("app not responding", a blank widget after restarts, laggy settings). The widget's provider was creating itself recursively about 100 times on every start.
+
+## FAQ
+
+**Does it work on Samsung / Xiaomi / Pixel / OnePlus…?**
+Yes. Breezy runs on any Android 6+ phone and the widget on Android 7+. Nothing is vendor-specific any more.
+
+**The widget says "Tap to allow Breezy Weather".**
+Tap it and allow the permission. If you denied it before, use **App settings** on that screen, then **Permissions**.
+
+**The widget doesn't update.**
+Check that Breezy itself has fresh data, and that its background updates are on. Then turn on data sharing (Install, step 4).
+
+**Can I have a bigger weather icon?**
+Not yet. It's on the list.
+
+**Where are the logs?**
+`Android/data/com.htc.widget.weatherclock/files/breezy_status.txt` on the phone. It records syncs ("synced 1 rows from Breezy: London, 8°C, 15°/7° code 35"), weather taps and errors. Some phones, Honor for example, hide app logs from `adb logcat`.
 
 ## How it works
 
-Honor Weather keeps its data behind a system-only permission (`ACCESS_WEATHERCLOCK_PROVIDER`, `signature|privileged`), so normal apps can't query it. Honor's **lock-screen widgets**, however, are ordinary `RemoteViews` built inside Honor's own process.
+- **The provider:** the widget's weather provider (`OpenMeteoBridge`, which keeps its old name for compatibility) reads Breezy's data-sharing content provider, `content://org.breezyweather.provider.weather`. It's guarded by the user-granted permission `org.breezyweather.READ_PROVIDER`. The provider turns the gzipped JSON into the HTC library's weather rows.
+- **Updates:** Breezy's `org.breezyweather.ACTION_UPDATE_NOTIFIER` broadcast triggers an immediate re-read.
+- **The APK:** a patched APK. The base APK's smali is edited, new Java code is added as `classes3.dex`, and the binary manifest is edited with a small AXML editor. That removes the internet and location permissions and adds Breezy's permission, the update receiver and the settings screen.
 
-1. The mod hosts Honor's 2×1 lock-screen widget
-   (`.widget.keyguardwidget.CurrentWeather2x1KeyGuardWidgetWeatherProvider`) in a private, invisible `AppWidgetHost`.
-2. On every read it binds a **fresh** widget ID. Honor only sends new data to a widget when it's bound (apps aren't allowed to send `APPWIDGET_UPDATE`, and Honor doesn't refresh IDs it didn't create), so reusing one ID leaves the widget stuck on old weather. The bridge then waits up to about 8 s for Honor's push and ignores the `--°-` placeholder.
-3. It inflates the widget off-screen and reads its two text fields:
-   - `tv_title`, e.g. `16°Sunny`
-   - `tv_content`, e.g. `10°/19°`
-4. The condition text is matched against Honor's own `weather_description_ex` string array, in the phone's language. Its index is an AccuWeather icon code, the same code set the HTC widget uses.
-5. These values overwrite the stored weather rows. The HTC widget then draws them as if they came from its own backend.
-6. Open-Meteo is still fetched every 3 hours, but only for sunrise/sunset times and the forecast-day structure the HTC library expects. If Honor's data can't be read, the widget falls back to Open-Meteo.
+Full technical write-up: **[BREEZY.md](BREEZY.md)** (Breezy edition) and **[ANIMATIONS.md](ANIMATIONS.md)** (Sense 3 animations).
 
-```
-Honor Weather ──► Honor lock-screen widget (RemoteViews)
-                          │  hosted invisibly
-                          ▼
-              HonorWeather.read()  ──►  "16°Sunny" / "10°/19°"
-                          │
-                          ▼
-   stored weather rows (temp, high/low, condition, lastUpdate)
-                          │
-                          ▼
-                HTC Weather Clock widget
-```
+## Previous releases
 
-## Installation
+- **v1.2.3-honor:** weather read from Honor Weather's lock-screen widget (Honor phones only, needed `adb appwidget grantbind`). Superseded by the Breezy edition.
+- **v1.2.3 and earlier:** Open-Meteo weather. See the `release-notes-*.md` files.
 
-1. Download `HTC-WeatherClock-v1.2.3-honor.apk`.
-2. Install it. It's signed with the same key as the original mod, so it installs over an existing copy and keeps your widgets:
-   ```sh
-   adb install -r HTC-WeatherClock-v1.2.3-honor.apk
-   ```
-3. **Required once:** allow the widget to host Honor's widget.
-   ```sh
-   adb shell appwidget grantbind --package com.htc.widget.weatherclock --user 0
-   ```
-   Without this, the widget quietly keeps showing Open-Meteo data. The grant survives updates and reboots. Run it again after a fresh install or after clearing the app's data.
-4. Make sure Honor Weather has a city, or has Location turned on. The widget mirrors whatever Honor's lock-screen weather shows.
+## Credits and legal
 
-### Checking that it works
-
-The widget keeps a small status log:
-
-```sh
-adb shell cat /sdcard/Android/data/com.htc.widget.weatherclock/files/honor_weather.txt
-```
-
-A working setup looks like this:
-
-```
-Fri Oct 23 13:31:02 GMT+02:00 2026 Honor: 17°Sunny / 10°/19° -> code 1 day
-```
-
-A line is written only when the weather changes or something fails. If something fails, the line says why, for example `no Honor data, kept Open-Meteo (bind failed)`. That one means step 3 was skipped.
-
----
-
-## Changes in detail
-
-### 1. Tap opens Honor Weather
-
-| File | Change |
-|---|---|
-| `smali/.../util/WeatherBase.smali` | `getWeatherClickIntent` and `setSettingClick` wrap their intents with `PhoneWeather.getIntent()` |
-| `smali_classes2/.../openmeteo/PhoneWeather.smali` (new) | Builds a trampoline intent to `CalendarTapActivity`. `launch()` starts `com.hihonor.android.totemweather/.WeatherHome`, then the Huawei equivalent, then the original intent as a fallback |
-| `smali_classes2/.../openmeteo/CalendarTapActivity.smali` | In `onCreate`, recognises the `PHONE_WEATHER` action, calls `PhoneWeather.launch()` and finishes |
-
-### 1b. Sense 3 weather animations
-
-HTC's Sense 3 widget (`HtcWeather3DWidget`) drew its scenes with HTC's Mode10 engine, a 32-bit ARM library that can't load on arm64-only phones. The scene files themselves (`assets/Port/NN.m10`, one per AccuWeather code, with textures from `fusion.apk`'s `shared.m10`) were reverse-engineered and are played by a small new renderer instead.
-
-| File | Change |
-|---|---|
-| `htc-sense3-weather/tools/bake.py` (PC) | Converts each `.m10` scene into a compact `NN.hws` (node tree, layers, keyframe tracks) and its FastLZ/ETC1 textures into lossless WebP |
-| `assets/weather_anim/` (new) | 44 baked scenes, 62 textures and 9 HTC weather sounds from HTC Weather 9.00 (`sound_*.flac`, stored uncompressed) |
-| `honorbridge/.../AnimScene.java` (new) | Evaluates the scene: per-node position, rotation (quaternion), scale and opacity tracks, parent transforms, the scene camera's perspective, and draw order by layer. The tracks are 30 fps samples, and in-between frames are interpolated (nlerp for rotations, with jumps such as respawning raindrops left unblended), so motion is smooth at any refresh rate. Sprites are drawn with hardware-accelerated `Canvas` perspective matrices |
-| `honorbridge/.../WeatherAnim.java` (new) | The full-screen translucent player: picks `NN.hws` for the current condition (day/night aware), requests the display's fastest mode (`preferredDisplayModeId`, plus the frame-rate category on Android 15+), plays the build-up and then loops, plays the sound only in normal ringer mode, and fades out. A tap opens Honor Weather through `PhoneWeather.launch()` |
-| `HonorWeather.java` | Remembers the condition code it applies, for the animation |
-| `smali/.../util/WeatherBase.smali` | `getWeatherClickIntent` now uses `WeatherAnim.getIntent()`. `setSettingClick` (city name) still goes straight to Honor Weather |
-| `smali_classes2/.../openmeteo/CalendarTapActivity.smali` | `onCreate` hands `WEATHER_ANIM` intents to `WeatherAnim.handle()` first. The activity is already translucent, so the binary manifest is unchanged |
-
-Measured on the Honor MBH-N49 cover screen: 120 Hz, 0 janky frames, about 5 ms per frame.
-
-See **[ANIMATIONS.md](ANIMATIONS.md)** for the full write-up: the Mode10 format, the bake pipeline, how the player works, and the scene list.
-
-### 2. Package visibility (Android 11+)
-
-| File | Change |
-|---|---|
-| `AndroidManifest.xml` (binary) | The unused `<queries>` entry `com.samsung.android.calendar` was rewritten to `com.hihonor.android.totemweather` by editing the binary XML string pool directly. Without this entry the app can't see Honor Weather at all |
-
-### 3. Honor Weather data bridge
-
-| File | Change |
-|---|---|
-| `honorbridge/src/.../HonorWeather.java` (new, compiled to `classes3.dex`) | Hosts and reads Honor's lock-screen widget. Maps conditions to AccuWeather codes, picks day/night from sunrise/sunset, and writes the current temp, high/low, condition, `dayLightFlag` and `lastUpdate` |
-| `smali_classes2/.../openmeteo/OpenMeteoBridge.smali` | **`refreshForLocation`:** the Open-Meteo result is passed through `HonorWeather.overlay()` before it's stored |
-| | **`syncAllLocked`:** calls the new `honorOverlayStored()` on every sync |
-| | **New `honorOverlayStored()`:** every 3 h, refreshes all location rows from Open-Meteo. On every sync, applies Honor's data to the stored rows and saves them |
-
-### 4. Problems fixed along the way
-
-- **The widget showed the hourly forecast instead of current weather.** The HTC weather library ignores the `cur*` fields once `lastUpdate` is overdue. The bridge now sets `lastUpdate` when it applies fresh Honor data.
-- **The city never refreshed.** Cities added through the HTC city picker (`app=com.htc.elroy.Weather`) are skipped by the mod's sync. The 3-hourly refresh in `honorOverlayStored()` covers every row.
-- **The moon showed at midday.** The stored `dayLightFlag` came from the last fetch, which ran at night. Day/night is now computed from today's `fstSunrise`/`fstSunset`, which are stored as HHMM integers such as `728`.
-- **The widget got stuck on old weather (for example "Clear" while it was raining).** A widget ID that stays bound only received Honor's data at bind time and then went stale. Each read now rebinds a fresh ID.
-- **Honor's text contains invisible characters.** Numbers are wrapped in Unicode bidi marks (U+202A/U+202C). These are stripped before parsing.
-
-### 5. Sync timing and battery
-
-| Item | Before | After |
-|---|---|---|
-| Weather sync interval while the screen is on (`FlipClockTicker.maybeRefreshWeather`) | 30 min | 10 min |
-| `requestSync` throttle (`OpenMeteoBridge.requestSync`) | 20 min | 10 min |
-| Flip-clock minute alarm (`FlipClockTicker.armAlarms`) | `RTC_WAKEUP` | `RTC`, so it never wakes a sleeping phone |
-| Open-Meteo downloads | mod's own sync, which skipped picker cities | every 3 h, all cities |
-The bridge itself is also light: it reads Honor's widget at most once a minute (the result is cached for 60 s), retries at most 3 times while a freshly bound widget is still empty, and writes its status log only when the message changes.
-
-Syncs only run while the screen is on. After the phone has been locked for a while, the widget catches up within 10 minutes of unlocking. Reading Honor's data happens entirely on the device.
-
----
-
-## Building from source
-
-Requirements: JDK 11+, the Android SDK (build-tools 36.0.0, platform `android-36`), and Python 3 if you plan to edit the binary manifest again.
-
-```
-work/
-├── apktool-project/   # base APK decoded with `apktool d -r` (resources kept raw)
-├── honorbridge/src/   # HonorWeather.java, AnimScene.java, WeatherAnim.java
-├── tools/             # apktool 2.12.1 (apktool.jar), uber-apk-signer 1.3.0 (signer.jar)
-└── build.sh
-```
-
-```sh
-./build.sh
-# → ../HTC-WeatherClock-v1.2.3-honor.apk
-```
-
-`build.sh` does the following:
-1. Compiles the Java sources with `javac` and converts it to dex with `d8`.
-2. Rebuilds the smali with `apktool b`.
-3. Adds the dex as `classes3.dex`.
-4. Zipaligns and signs the APK with uber-apk-signer's default debug key, the same key as the original mod.
-
-> The base APK's resources can't be recompiled with aapt2, so the project is decoded with `-r` and resources and the manifest stay binary. Manifest changes have to be made at the binary (AXML) level.
-
-## Limitations
-
-- **No forecast from Honor.** Honor's lock-screen widgets only expose current conditions and today's high/low. Any forecast days would still come from Open-Meteo, but this widget layout doesn't show them.
-- **Honor's location only.** The widget mirrors whatever city Honor Weather's lock-screen widget uses.
-- **Tested only on Honor devices.** Other phones fall back to the original Open-Meteo behaviour.
-- **Animation assets are HTC's.** The baked scenes, textures and sounds come from HTC firmware and the HTC Weather app. Don't publish them. Regenerate them with `bake.py` from your own copies.
-- **The `grantbind` step needs adb once.** Android only shows a bind-permission dialog for home-screen widgets. Honor's lock-screen widget can only be authorised over adb.
-
-## Credits
-
-- The original HTC Weather Clock widget belongs to HTC.
-- The Open-Meteo port (v1.2.3) is by its respective modder.
-- Weather data comes from Honor Weather (AccuWeather) and [Open-Meteo](https://open-meteo.com).
-
-This is an unofficial modification for personal use. It isn't affiliated with HTC or Honor.
+- The HTC Weather Clock widget, the Sense 3 weather scenes, textures and the weather sounds belong to **HTC**. This is an unofficial fan modification for personal use, not affiliated with or endorsed by HTC, Honor or Breezy Weather.
+- Weather data comes from **[Breezy Weather](https://github.com/breezy-weather/breezy-weather)** (LGPL-3.0) and the sources you choose in it.
+- The Open-Meteo port of the widget (v1.1–v1.2.3) is by its respective modder.
