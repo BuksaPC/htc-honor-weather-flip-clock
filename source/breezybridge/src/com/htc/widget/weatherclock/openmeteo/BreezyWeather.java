@@ -96,6 +96,37 @@ public final class BreezyWeather {
 
     private static final String PREFS = "breezy", KEY_NO_LOCATION = "no_location";
 
+    // ---- Day/night ----
+
+    /** The Breezy location the widget shows: lat, lon, time zone. */
+    private static volatile Object[] sSunPlace;
+
+    static void rememberSunPlace(Context ctx, Place p) {
+        sSunPlace = new Object[]{p.lat, p.lon, p.timezone};
+        prefs(ctx).edit().putString("sun_place", p.lat + ";" + p.lon + ";" + p.timezone).apply();
+    }
+
+    static void loadSunPlace(Context ctx) {
+        String[] v = prefs(ctx).getString("sun_place", "").split(";");
+        if (sSunPlace != null || v.length != 3) return;
+        try {
+            sSunPlace = new Object[]{Double.parseDouble(v[0]), Double.parseDouble(v[1]), v[2]};
+        } catch (NumberFormatException ignored) {
+        }
+    }
+
+    /**
+     * Called from CityInfo.isDay: day/night from the real sunrise and sunset at the Breezy location. HTC's own
+     * check parses sunrise/sunset strings in the city's time zone and got it wrong on some phones (night icon
+     * and animation during the day). Before the first sync, HTC's value.
+     */
+    public static boolean isDay(boolean htc) {
+        Object[] s = sSunPlace;
+        if (s == null) return htc;
+        long now = System.currentTimeMillis();
+        return Sun.at((Double) s[0], (Double) s[1], now, TimeZone.getTimeZone((String) s[2])).isDay(now);
+    }
+
     // ---- Widget settings (WeatherSettingsActivity) ----
 
     private static android.content.SharedPreferences prefs(Context ctx) {
@@ -397,7 +428,11 @@ public final class BreezyWeather {
         r.put("lastUpdate", String.valueOf(refreshed));
         r.put("curTempC", String.valueOf(Math.round(temp)));
         r.put("curTempF", String.valueOf(cToF(temp)));
-        r.put("curConditionId", String.valueOf(accu(cur.optString("weatherCode", ""), day)));
+        String code = currentCode(cur, hourly, first, refreshed, now, day);
+        r.put("curConditionId", String.valueOf(accu(code, day)));
+        // Not a widget column; only for the sync log.
+        r.put("breezyCode", cur.optString("weatherCode", "") + (code.equals(cur.optString("weatherCode", ""))
+                ? "" : " -> " + code) + (day ? " day" : " night"));
         r.put("highTempC", String.valueOf(Math.round(hi)));
         r.put("highTempF", String.valueOf(cToF(hi)));
         r.put("lowTempC", String.valueOf(Math.round(lo)));
@@ -446,9 +481,42 @@ public final class BreezyWeather {
         return r;
     }
 
+    /**
+     * Breezy's current weather code. When it's missing or unknown (some sources have no current condition),
+     * or Breezy's data is over an hour old, the forecast for this hour is closer to the weather outside.
+     * Without either, today's day or night half. Without any code, both icon and animation used to show sun.
+     */
+    static String currentCode(JSONObject cur, JSONArray hourly, JSONObject today, long refreshed, long now,
+                              boolean day) {
+        String c = normalize(cur.optString("weatherCode", ""));
+        if (known(c) && now - refreshed < 3600_000L) return c;
+        for (int i = 0; hourly != null && i < hourly.length(); i++) {
+            JSONObject h = hourly.optJSONObject(i);
+            long at = h == null ? 0 : h.optLong("date");
+            if (at <= now && now < at + 3600_000L) {
+                String hc = normalize(h.optString("weatherCode", ""));
+                if (known(hc)) return hc;
+            }
+        }
+        if (known(c)) return c;
+        return normalize(code(today == null ? null : today.optJSONObject(day ? "day" : "night")));
+    }
+
+    private static String normalize(String code) {
+        return code == null ? "" : code.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean known(String code) {
+        return accu(code, true, -1) != -1;
+    }
+
     /** Maps Breezy's weather codes to the AccuWeather codes the HTC icons and Sense 3 scenes use. */
     static int accu(String code, boolean day) {
-        switch (code == null ? "" : code) {
+        return accu(code, day, day ? 1 : 33);
+    }
+
+    private static int accu(String code, boolean day, int unknown) {
+        switch (normalize(code)) {
             case "clear": return day ? 1 : 33;
             case "partly_cloudy": return day ? 3 : 35;
             case "cloudy": return day ? 7 : 38;
@@ -461,7 +529,7 @@ public final class BreezyWeather {
             case "wind": return 32;
             case "thunder":
             case "thunderstorm": return day ? 15 : 42;
-            default: return day ? 1 : 33;
+            default: return unknown;
         }
     }
 
@@ -567,8 +635,12 @@ public final class BreezyWeather {
             c.set(Calendar.MINUTE, 0);
             c.set(Calendar.SECOND, 0);
             c.set(Calendar.MILLISECOND, 0);
-            long noonLocal = c.getTimeInMillis();
-            double jd = noonLocal / 86400000.0 + 2440587.5;
+            // The day number must be whole: the local date's noon UTC. Local noon's own instant shifted
+            // sunrise and sunset by the UTC offset (5.5 h in India: night icons from noon).
+            Calendar utc = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+            utc.clear();
+            utc.set(c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH), 12, 0, 0);
+            double jd = utc.getTimeInMillis() / 86400000.0 + 2440587.5;
             double n = jd - 2451545.0 + 0.0008;
             double jStar = n - lon / 360.0;
             double m = Math.toRadians((357.5291 + 0.98560028 * jStar) % 360);

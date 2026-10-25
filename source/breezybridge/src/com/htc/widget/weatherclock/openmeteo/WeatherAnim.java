@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
@@ -27,6 +28,8 @@ public final class WeatherAnim {
     private static final String TAP_ACTIVITY = "com.htc.widget.weatherclock.openmeteo.CalendarTapActivity";
     private static final String EXTRA_CODE = "condition";
     private static final float FADE_S = 0.7f;
+    /** The widget's weather icon within a Sense 3 scene, as fractions of its size (measured on a 1060 px screen). */
+    private static final float SCENE_ICON_X = 0.5f, SCENE_ICON_Y = 0.47f;
 
     private WeatherAnim() {
     }
@@ -85,6 +88,8 @@ public final class WeatherAnim {
             return true;
         }
         int code = in.getIntExtra(EXTRA_CODE, 1);
+        // The widget may have been drawn before sunrise or sunset.
+        code = BreezyWeather.isDay(code < 33) ? toDay(code) : toNight(code);
         final String name = sceneFor(a, code);
         if (name == null) {
             openWeather(a, in);
@@ -231,6 +236,8 @@ public final class WeatherAnim {
         private long t0;
         private float endS;
         private boolean done;
+        private float scale = 1f, ox, oy;
+        private boolean placed;
 
         Player(Activity a, Intent in, String sound) {
             super(a);
@@ -238,6 +245,26 @@ public final class WeatherAnim {
             intent = in;
             this.sound = sound;
             if (Build.VERSION.SDK_INT >= 35) setRequestedFrameRate(View.REQUESTED_FRAME_RATE_CATEGORY_HIGH);
+        }
+
+        /**
+         * Where the scene goes. It was made for a phone-width screen with the clock at the top, the weather icon
+         * at about (SCENE_ICON_X, SCENE_ICON_Y) of the scene. On wide screens (tablets, unfolded foldables) it
+         * keeps a phone-like size. When the launcher says where the tap was, the scene is moved so its icon
+         * point sits on the tapped icon; otherwise (Honor's launcher doesn't say) it starts at the top.
+         */
+        private void place(AnimScene s) {
+            int w = getWidth(), h = getHeight();
+            scale = Math.min(w, h * 0.62f) / s.width;
+            ox = (w - s.width * scale) / 2f;
+            oy = 0f;
+            Rect tap = intent.getSourceBounds();
+            if (tap != null && !tap.isEmpty()) {
+                int[] at = new int[2];
+                getLocationOnScreen(at);
+                ox = tap.exactCenterX() - at[0] - SCENE_ICON_X * s.width * scale;
+                oy = tap.exactCenterY() - at[1] - SCENE_ICON_Y * s.height * scale;
+            }
         }
 
         void start(AnimScene s) {
@@ -288,8 +315,11 @@ public final class WeatherAnim {
                 } catch (Exception ignored) {
                 }
             }
-            // Full width, from the top of the screen, as the scene sat above the Sense 3 clock.
-            scene.draw(c, scene.frameAt(t), getWidth() / (float) scene.width, 0f, 0f, fade);
+            if (!placed) {
+                place(scene);
+                placed = true;
+            }
+            scene.draw(c, scene.frameAt(t), scale, ox, oy, fade);
             postInvalidateOnAnimation();
         }
 

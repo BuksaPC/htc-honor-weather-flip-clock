@@ -65,6 +65,7 @@ public class OpenMeteoBridge extends ContentProvider {
         final Context ctx = getContext();
         if (ctx == null) return true;
         ensureDefaultTemperatureUnit();
+        BreezyWeather.loadSunPlace(ctx);
         // The clock code queries this provider. Running it here, before Android has published the provider,
         // makes Android build another instance whose onCreate does the same: ~100 nested instances and a
         // 20-30 s "failed to complete startup" ANR on every cold start. So it runs once we are published.
@@ -262,6 +263,7 @@ public class OpenMeteoBridge extends ContentProvider {
             keys.put(k[0] + "|" + k[1] + "|" + k[2], k);
         }
 
+        BreezyWeather.rememberSunPlace(ctx, main);
         Map<String, JSONObject> weather = new HashMap<>();
         JSONArray out = new JSONArray();
         for (String[] k : keys.values()) {
@@ -286,7 +288,8 @@ public class OpenMeteoBridge extends ContentProvider {
                 + first.optString("highTempC") + "°/" + first.optString("lowTempC") + "°");
         BreezyWeather.setLastSync(ctx, summary);
         BreezyWeather.log(ctx, "synced " + out.length() + " rows from Breezy: " + summary
-                + (first == null ? "" : " code " + first.optString("curConditionId")));
+                + (first == null ? "" : " code " + first.optString("curConditionId")
+                + " (Breezy " + first.optString("breezyCode") + ")"));
 
         ctx.getContentResolver().notifyChange(DATA_URI, null);
         ctx.getContentResolver().notifyChange(CONTENT_URI, null);
