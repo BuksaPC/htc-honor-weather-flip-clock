@@ -141,12 +141,20 @@ public final class BreezyWeather {
         prefs(ctx).edit().putBoolean("feels_like", on).apply();
     }
 
-    static boolean tapOpensBreezy(Context ctx) {
-        return prefs(ctx).getBoolean("tap_opens_breezy", false);
+    /** What tapping the weather does. */
+    static final int TAP_ANIMATION = 0, TAP_BREEZY = 1, TAP_ANIMATION_FORECAST = 2;
+
+    static int tapMode(Context ctx) {
+        // Before v1.2.8 a boolean: open Breezy or not.
+        return prefs(ctx).getInt("tap_mode", prefs(ctx).getBoolean("tap_opens_breezy", false) ? TAP_BREEZY : TAP_ANIMATION);
     }
 
-    static void setTapOpensBreezy(Context ctx, boolean on) {
-        prefs(ctx).edit().putBoolean("tap_opens_breezy", on).apply();
+    static void setTapMode(Context ctx, int mode) {
+        prefs(ctx).edit().putInt("tap_mode", mode).apply();
+    }
+
+    static boolean tapOpensBreezy(Context ctx) {
+        return tapMode(ctx) == TAP_BREEZY;
     }
 
     static boolean animationSound(Context ctx) {
@@ -189,7 +197,11 @@ public final class BreezyWeather {
     public static void setupHint(Context ctx, android.widget.RemoteViews rv) {
         try {
             State s = quickState(ctx);
-            if (s == State.READY) return;
+            if (s == State.READY) {
+                WeatherChange.apply(ctx, rv);
+                alertLine(ctx, rv);
+                return;
+            }
             String pkg = ctx.getPackageName();
             int date = ctx.getResources().getIdentifier("week_date", "id", pkg);
             int block = ctx.getResources().getIdentifier("temp_info_block", "id", pkg);
@@ -207,6 +219,16 @@ public final class BreezyWeather {
         }
     }
 
+    /** A weather alert in force replaces the date line ("⚠ Wind warning"), as long as it lasts. */
+    private static void alertLine(Context ctx, android.widget.RemoteViews rv) {
+        if (!alertsOnWidget(ctx)) return;
+        JSONObject a = topAlert(ctx);
+        int date = ctx.getResources().getIdentifier("week_date", "id", ctx.getPackageName());
+        if (a == null || date == 0) return;
+        String h = a.optString("headline");
+        rv.setTextViewText(date, "\u26a0 " + (h.length() > 40 ? h.substring(0, 39) + "…" : h));
+    }
+
     /**
      * Also from WeatherBar.apply: with "show the feels-like temperature" on, the temperature reads
      * "Feels like 6" with a small label before the number, so it is never mistaken for the real temperature.
@@ -215,13 +237,7 @@ public final class BreezyWeather {
         try {
             if (!feelsLike(ctx) || quickState(ctx) != State.READY) return;
             int id = ctx.getResources().getIdentifier("temperature", "id", ctx.getPackageName());
-            JSONArray rows = new JSONArray(ctx.getSharedPreferences("openmeteo_weather", 0).getString("data", "[]"));
-            JSONObject row = null;
-            for (int i = 0; i < rows.length() && row == null; i++) {
-                JSONObject r = rows.optJSONObject(i);
-                if (r != null && "1".equals(r.optString("type"))) row = r;
-            }
-            if (row == null && rows.length() > 0) row = rows.optJSONObject(0);
+            JSONObject row = mainRow(ctx);
             if (id == 0 || row == null) return;
             String t = row.optString(TemperatureUnit.isCelsius(ctx) ? "curTempC" : "curTempF", "");
             if (t.isEmpty()) return;
@@ -231,6 +247,75 @@ public final class BreezyWeather {
             rv.setTextViewText(id, s);
         } catch (Throwable t) {
             Log.w(TAG, "feels-like label failed", t);
+        }
+    }
+
+    /** Breezy's alerts in force at {@code now}, most severe first: [{headline, severity, end}]. */
+    static JSONArray activeAlerts(JSONArray alerts, long now) {
+        List<JSONObject> out = new ArrayList<>();
+        for (int i = 0; alerts != null && i < alerts.length(); i++) {
+            JSONObject a = alerts.optJSONObject(i);
+            if (a == null) continue;
+            long start = a.optLong("startDate", 0), end = a.optLong("endDate", 0);
+            String headline = a.optString("headline", "").trim();
+            if (headline.isEmpty() || "null".equals(headline)) headline = firstLine(a.optString("description", ""));
+            if (headline.isEmpty() || (start > 0 && start > now) || (end > 0 && end < now)) continue;
+            try {
+                out.add(new JSONObject().put("headline", headline).put("severity", a.optInt("severity", 0))
+                        .put("end", end));
+            } catch (Exception ignored) {
+            }
+        }
+        java.util.Collections.sort(out, (x, y) -> y.optInt("severity") - x.optInt("severity"));
+        return new JSONArray(out);
+    }
+
+    private static String firstLine(String s) {
+        if (s == null || "null".equals(s)) return "";
+        s = s.trim();
+        int nl = s.indexOf('\n');
+        return (nl > 0 ? s.substring(0, nl) : s).trim();
+    }
+
+    /** The most severe alert in force for the main place, or null. */
+    static JSONObject topAlert(Context ctx) {
+        JSONObject row = mainRow(ctx);
+        JSONArray a = row == null ? null : row.optJSONArray("alerts");
+        if (a == null) {
+            try {
+                a = row == null ? null : new JSONArray(row.optString("alerts", "[]"));
+            } catch (Exception e) {
+                a = null;
+            }
+        }
+        long now = System.currentTimeMillis();
+        for (int i = 0; a != null && i < a.length(); i++) {
+            JSONObject o = a.optJSONObject(i);
+            if (o != null && (o.optLong("end", 0) == 0 || o.optLong("end") > now)) return o;
+        }
+        return null;
+    }
+
+    static boolean alertsOnWidget(Context ctx) {
+        return prefs(ctx).getBoolean("alerts_on_widget", true);
+    }
+
+    static void setAlertsOnWidget(Context ctx, boolean on) {
+        prefs(ctx).edit().putBoolean("alerts_on_widget", on).apply();
+    }
+
+    /** The stored data row of the widget's main place (current location), or the first one; null before a sync. */
+    static JSONObject mainRow(Context ctx) {
+        try {
+            JSONArray rows = new JSONArray(ctx.getSharedPreferences("openmeteo_weather", 0).getString("data", "[]"));
+            JSONObject row = null;
+            for (int i = 0; i < rows.length() && row == null; i++) {
+                JSONObject r = rows.optJSONObject(i);
+                if (r != null && "1".equals(r.optString("type"))) row = r;
+            }
+            return row != null ? row : rows.optJSONObject(0);
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -292,7 +377,7 @@ public final class BreezyWeather {
     static JSONObject weather(Context ctx, Place p) {
         Uri uri = Uri.parse(BASE + "weather").buildUpon()
                 .appendQueryParameter("withMinutely", "false")
-                .appendQueryParameter("withAlerts", "false")
+                .appendQueryParameter("withAlerts", "true")
                 .appendQueryParameter("withNormals", "false")
                 .appendQueryParameter("temperatureUnit", "c")
                 .appendQueryParameter("speedUnit", "mph")
@@ -437,6 +522,8 @@ public final class BreezyWeather {
         // Not a widget column; only for the sync log.
         r.put("breezyCode", cur.optString("weatherCode", "") + (code.equals(cur.optString("weatherCode", ""))
                 ? "" : " -> " + code) + (day ? " day" : " night"));
+        // Not a widget column: alerts in force now, for the widget's date line, the notification and the panel.
+        r.put("alerts", activeAlerts(w.optJSONArray("alerts"), now));
         r.put("highTempC", String.valueOf(Math.round(hi)));
         r.put("highTempF", String.valueOf(cToF(hi)));
         r.put("lowTempC", String.valueOf(Math.round(lo)));

@@ -67,8 +67,13 @@ final class UnlockWeather {
 
     /** The settings screen for the first permission still missing, or null when both are granted. */
     static Intent missingPermission(Context ctx) {
+        return missingPermission(ctx, true);
+    }
+
+    /** As above; {@code overlay} false when only usage access is needed (the flip sound). */
+    static Intent missingPermission(Context ctx, boolean overlay) {
         Uri pkg = Uri.parse("package:" + ctx.getPackageName());
-        if (!canOverlay(ctx)) {
+        if (overlay && !canOverlay(ctx)) {
             return new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, pkg);
         }
         if (!hasUsageAccess(ctx)) {
@@ -107,6 +112,13 @@ final class UnlockWeather {
     }
 
     private static volatile boolean sPlayed;
+
+    /** The home screen is in front now (needs usage access; false without it). */
+    static boolean homeInFront(Context ctx) {
+        if (!hasUsageAccess(ctx)) return false;
+        String front = frontPackage(ctx);
+        return front != null && homePackages(ctx).contains(front);
+    }
 
     /** The package of the activity resumed last (the one in front now). */
     private static String frontPackage(Context ctx) {

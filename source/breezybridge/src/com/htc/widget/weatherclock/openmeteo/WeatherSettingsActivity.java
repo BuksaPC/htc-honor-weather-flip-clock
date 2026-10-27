@@ -37,8 +37,8 @@ public class WeatherSettingsActivity extends Activity {
     private LinearLayout mList;
     private TextView mStatus;
     private Button mStatusAction;
-    private Switch mUnlockWeather;
-    private TextView mUnlockPerm;
+    private TextView mUnlockPerm, mRestricted;
+    private Button mCheck;
     private Button mUnlockAllow;
     private int mAccent;
 
@@ -76,6 +76,11 @@ public class WeatherSettingsActivity extends Activity {
         super.onResume();
         refreshStatus();
         refreshUnlockWeather();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        WeatherNotification.update(this);  // the notification permission was just answered
     }
 
     /** Points the widget at "current location" and reports success to the launcher. */
@@ -129,14 +134,20 @@ public class WeatherSettingsActivity extends Activity {
         }));
 
         header("After unlocking (as on HTC Sense)");
-        mList.addView(toggle("Flip the clock", FlipStyle.unlockFlip(this),
-                on -> FlipStyle.setUnlockFlip(this, on)));
-        mUnlockWeather = toggle("Play the weather animation over the home screen", UnlockWeather.enabled(this), on -> {
-            UnlockWeather.setEnabled(this, on);
+        boolean flip = FlipStyle.unlockFlip(this), anim = UnlockWeather.enabled(this);
+        mList.addView(radios(new String[]{"Nothing", "Flip the clock", "Play the weather animation",
+                "Flip the clock and play the weather animation"}, (flip ? 1 : 0) + (anim ? 2 : 0) == 3 ? 3
+                : flip ? 1 : anim ? 2 : 0, i -> {
+            FlipStyle.setUnlockFlip(this, i == 1 || i == 3);
+            UnlockWeather.setEnabled(this, i >= 2);
+            refreshUnlockWeather();
+            if (i >= 2) allowUnlockWeather();
+        }));
+        mList.addView(toggle("Flip sound (when the ringer is on)", FlipSound.enabled(this), on -> {
+            FlipSound.setEnabled(this, on);
             refreshUnlockWeather();
             if (on) allowUnlockWeather();
-        });
-        mList.addView(mUnlockWeather);
+        }));
         mUnlockPerm = text("", 13, false);
         mUnlockPerm.setAlpha(0.7f);
         mUnlockPerm.setPadding(dp(8), 0, 0, 0);
@@ -144,9 +155,26 @@ public class WeatherSettingsActivity extends Activity {
         mUnlockAllow = button("Allow", v -> allowUnlockWeather());
         mList.addView(mUnlockAllow);
 
+        header("Weather on the widget");
+        mList.addView(toggle("Animate weather changes (icon and temperature)", WeatherChange.enabled(this),
+                on -> WeatherChange.setEnabled(this, on)));
+        mList.addView(toggle("Show weather alerts in place of the date", BreezyWeather.alertsOnWidget(this), on -> {
+            BreezyWeather.setAlertsOnWidget(this, on);
+            OpenMeteoBridge.requestSync(this, true);
+        }));
+        mList.addView(toggle("Weather in notifications (also on the lock screen)", WeatherNotification.enabled(this), on -> {
+            if (on && !WeatherNotification.permitted(this) && Build.VERSION.SDK_INT >= 33) {
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1);
+            }
+            WeatherNotification.setEnabled(this, on);
+        }));
+
         header("Tapping the weather");
-        mList.addView(radios(new String[]{"Play the Sense weather animation", "Open Breezy Weather"},
-                BreezyWeather.tapOpensBreezy(this) ? 1 : 0, i -> BreezyWeather.setTapOpensBreezy(this, i == 1)));
+        int[] modes = {BreezyWeather.TAP_ANIMATION, BreezyWeather.TAP_ANIMATION_FORECAST, BreezyWeather.TAP_BREEZY};
+        int mode = BreezyWeather.tapMode(this);
+        mList.addView(radios(new String[]{"Play the Sense weather animation", "Play the animation, then show the forecast",
+                "Open Breezy Weather"}, mode == BreezyWeather.TAP_BREEZY ? 2 : mode == BreezyWeather.TAP_ANIMATION_FORECAST ? 1 : 0,
+                i -> BreezyWeather.setTapMode(this, modes[i])));
         mList.addView(toggle("Animation sound (when the ringer is on)", BreezyWeather.animationSound(this),
                 on -> BreezyWeather.setAnimationSound(this, on)));
         TextView hint = text("Tapping the temperature always opens Breezy Weather. Tapping the clock opens the "
@@ -162,6 +190,11 @@ public class WeatherSettingsActivity extends Activity {
         mList.addView(upd);
 
         header("Troubleshooting");
+        mRestricted = text("", 14, false);
+        mRestricted.setTextColor(0xffd84315);
+        mList.addView(mRestricted);
+        mCheck = button("Unlock & battery check", v -> startActivity(new Intent(this, DiagnosticsActivity.class)));
+        mList.addView(mCheck);
         mList.addView(toggle("Debug log (for bug reports)", ClockLog.enabled(this), on -> ClockLog.setEnabled(this, on)));
         TextView log = text("Writes every clock tick, screen change and flip to Android/data/"
                 + "com.htc.widget.weatherclock/files/clock_ticks.txt. Leave it off otherwise: it writes every minute.",
@@ -205,22 +238,30 @@ public class WeatherSettingsActivity extends Activity {
     }
 
     /** Which permission the unlock animation still needs, while it's on. */
+    /** Which permission the unlock animation or the flip sound still needs, while on. */
     private void refreshUnlockWeather() {
         if (mUnlockPerm == null) return;
-        boolean on = UnlockWeather.enabled(this);
+        boolean anim = UnlockWeather.enabled(this), sound = FlipSound.enabled(this);
         boolean overlay = UnlockWeather.canOverlay(this), usage = UnlockWeather.hasUsageAccess(this);
-        boolean missing = on && (!overlay || !usage);
+        boolean needOverlay = anim && !overlay, needUsage = (anim || sound) && !usage;
+        boolean missing = needOverlay || needUsage;
         mUnlockPerm.setVisibility(missing ? View.VISIBLE : View.GONE);
         mUnlockAllow.setVisibility(missing ? View.VISIBLE : View.GONE);
+        if (mRestricted != null) {
+            String r = DiagnosticsActivity.restriction(this);
+            mRestricted.setText(r == null ? "" : r);
+            mRestricted.setVisibility(r == null ? View.GONE : View.VISIBLE);
+        }
         if (!missing) return;
-        mUnlockPerm.setText(!overlay
+        mUnlockPerm.setText(needOverlay
                 ? "Needs \"Display over other apps\" for Weather Clock: the animation plays in a window over the home screen."
-                : "Needs \"Usage access\" for Weather Clock: it only plays when you unlock to the home screen, never over an app.");
-        mUnlockAllow.setText(!overlay ? "Allow display over other apps" : "Allow usage access");
+                : "Needs \"Usage access\" for Weather Clock: the animation and the sound only play when you unlock to "
+                + "the home screen, never over an app.");
+        mUnlockAllow.setText(needOverlay ? "Allow display over other apps" : "Allow usage access");
     }
 
     private void allowUnlockWeather() {
-        Intent i = UnlockWeather.missingPermission(this);
+        Intent i = UnlockWeather.missingPermission(this, UnlockWeather.enabled(this));
         if (i == null) return;
         try {
             startActivity(i);

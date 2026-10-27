@@ -236,7 +236,7 @@ final class FlipAnimV3 {
                     sHandler.postDelayed(this, 15);
                     return;
                 }
-                if (!on) {
+                if (!on && !Boolean.FALSE.equals(sScreenOn)) {  // not twice: the ticker and the job both report it
                     ClockLog.tick(app, "PANEL off after " + waited + "ms");
                     screenOff(app);
                 }
@@ -368,6 +368,15 @@ final class FlipAnimV3 {
         push(app, rv);
     }
 
+    /** For the unlock check screen. */
+    static String status() {
+        long ago = sScreenOnAt == 0 ? -1 : (SystemClock.elapsedRealtime() - sScreenOnAt) / 1000;
+        return "screen " + (sScreenOn == null ? "not seen yet" : sScreenOn ? "on" : "off")
+                + (ago >= 0 ? " (on " + ago + " s ago)" : "")
+                + ", clock set back: " + (sPrepared ? "yes" : "no")
+                + ", unlock flip this time: " + (sIntroDone ? "played" : "not yet");
+    }
+
     /** adb test hook (ClockLog CASCADE_TEST): the unlock flip now. */
     static void testIntro(Context context) {
         intro(app(context), null);
@@ -424,6 +433,7 @@ final class FlipAnimV3 {
             setPrepared(app, false);
             markShown(app, h, m);
             push(app, rv);
+            FlipSound.unlock(app);
         } catch (Throwable th) {
             Log.w(TAG, "unlock flip failed", th);
         }

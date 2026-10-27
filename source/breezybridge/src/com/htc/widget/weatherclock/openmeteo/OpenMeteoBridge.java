@@ -330,6 +330,7 @@ public class OpenMeteoBridge extends ContentProvider {
         ctx.getContentResolver().notifyChange(CONTENT_URI, null);
         sendAppBroadcast(ctx, new Intent(RESULT_ACTION).putExtra("status", 1));
         refreshWidgets(ctx);
+        WeatherNotification.update(ctx);
     }
 
     private static void refreshWidgets(Context ctx) {

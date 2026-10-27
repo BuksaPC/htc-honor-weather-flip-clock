@@ -51,9 +51,14 @@ Updating from the **Honor edition** (v1.2.3-honor)? Install over it. The `adb ap
 | Weather source | Breezy status (city, temperature, high/low, last update), plus **Open Breezy** and **Breezy settings** |
 | Temperature | °C or °F |
 | Show the feels-like temperature | Shows Breezy's feels-like value, labelled **"Feels like"** on the widget |
-| Tapping the weather | Play the Sense animation, or open Breezy |
-| Flip the clock when unlocking | HTC Sense's unlock flip (on by default) |
+| After unlocking | Nothing, flip the clock (default), play the weather animation over the home screen, or both. The animation needs **Display over other apps** and **Usage access**, so it only plays on the home screen, never over an app |
+| Flip sound | A soft click with the unlock flip, only when the ringer is on and you unlock to the home screen (needs **Usage access**). Off by default |
+| Animate weather changes | When the icon or the temperature changes, the old one fades out over the new one (on by default) |
+| Show weather alerts in place of the date | Breezy's alert in force ("⚠ Wind warning") replaces the date line while it lasts (on by default) |
+| Weather in notifications | A quiet notification with the weather, so it also shows on the lock screen. Off by default |
+| Tapping the weather | Play the Sense animation, play it and then show the forecast (next hours and days, alerts), or open Breezy |
 | Animation sound | HTC's weather sounds, only when the ringer is on |
+| Troubleshooting | **Unlock & battery check** (what the phone allows in the background, what the unlock watch saw, a copyable report) and **Debug log** |
 
 ## Features
 
@@ -104,6 +109,9 @@ Update to the latest version. If it still happens, turn on **Debug log** in the 
 
 **On unlock the clock shows an earlier time for a moment.**
 That's the HTC unlock flip: Sense set the cards back an hour and two minutes, then flipped them forward. Honor's home screen applies widget updates about a second after it appears, so the flip starts then. Turn it off in the widget settings under **Clock**.
+
+**The unlock flip doesn't always play (Samsung, Xiaomi…).**
+Open the widget settings → Troubleshooting → **Unlock & battery check**. It shows whether the phone holds the widget back in the background, where your phone's maker hides that setting, and what the widget saw at your last unlock. **Copy report** gives a text you can paste into a bug report (no place or app names).
 
 **Does it work on Samsung / Xiaomi / Pixel / OnePlus…?**
 Yes. Breezy runs on any Android 6+ phone and the widget on Android 7+. Nothing is vendor-specific any more.

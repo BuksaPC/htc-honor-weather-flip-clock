@@ -36,7 +36,10 @@ These replace HTC's "Select a city" for the weather widgets. The dual, travel an
 
 - **Weather source:** Breezy status (city, temperature, high/low, last update), plus buttons to open Breezy and Breezy's settings. Shows **Set up** while Breezy is missing, not allowed, or has no location.
 - **Temperature:** °C or °F, and **Show the feels-like temperature**. When it's on, the widget shows a small "Feels like" label before the number.
-- **Tapping the weather:** play the Sense animation, or open Breezy. **Animation sound** on or off (it only plays when the ringer is on).
+- **After unlocking:** nothing, the flip, the weather animation over the home screen (`UnlockWeather`: an overlay window, played only when usage access shows the launcher in front), or both. **Flip sound** with the unlock flip.
+- **Weather on the widget:** **Animate weather changes** (`WeatherChange`), **Show weather alerts in place of the date**, **Weather in notifications** (`WeatherNotification`).
+- **Tapping the weather:** play the Sense animation, play it then show the forecast panel (`ForecastPanel`), or open Breezy. **Animation sound** on or off (it only plays when the ringer is on).
+- **Troubleshooting:** a warning when Android restricts the widget in the background, **Unlock & battery check** (`DiagnosticsActivity`) and **Debug log**.
 - **Updates:** where to set Breezy's refresh rate and how to turn on instant updates.
 
 When you add a widget, it's set to the Breezy location and added straight away, so pressing Back on the settings screen doesn't cancel it.
@@ -144,6 +147,22 @@ Each minute tick costs about 25 ms of CPU while the screen is on.
 - **The launcher applies updates late.** Honor's launcher applies widget updates only about a second after it shows again. The unlock flip therefore starts about a second after the home screen appears, and the set-back must already be in place when the launcher stops drawing.
 - **Turning it off:** the widget settings have "Flip the clock when unlocking" (`flip_clock_setup` / `unlock_flip`).
 
+### Unlock watch (v1.2.8)
+
+Android 14+ holds `SCREEN_ON`/`SCREEN_OFF` back from a frozen (cached) app, and Honor and Samsung freeze widget apps soon after the screen goes off, so the unlock flip used to depend on luck. Now:
+
+- **`ScreenWatch`:** at screen-off a non-wakeup exact alarm is set for a second later. It never wakes the phone; Android delivers it as soon as the phone wakes (at the latest when the screen comes on), and alarms reach frozen apps. Fired with the screen still off (a background wake-up), it's set again 5 s later. With the screen on it polls the lock screen for up to 8 s.
+- **`FlipAnimV3.onAction`** compares the screen with what it last handled on every broadcast and catches up on a missed change.
+- **The set-back is kept in prefs** (`flip_clock_setup/prepared`), so a process killed while the screen is off still flips on unlock. Without a set-back there's no unlock flip (it would jump back and forth).
+- **`UnlockWatchJob`** still keeps the process awake while the screen is on, so `SCREEN_OFF` arrives. It does no work after the unlock, and the ticker's once-a-second pulse no longer runs, so this costs memory rather than CPU.
+
+### Weather changes, alerts, forecast (v1.2.8)
+
+- **`build_weather_change.py`** wraps the 4x2 icon (`sun`) and temperature in a FrameLayout with a hidden overlay copy (ViewFlipper + ImageView/TextView, spare appcompat ids `action_bar_spinner`/`action_menu_divider` and `action_menu_presenter`/`split_action_bar`, anim `abc_slide_out_top` = fade out with a slight zoom). `WeatherChange` (called from `WeatherBar.apply` via `BreezyWeather.setupHint`) shows the overlay with the old value when the stored weather changes, and hides it again after the fade, the same pattern as the flip flaps.
+- **Alerts:** the Breezy query asks for alerts; the row keeps those in force (`alerts`: headline, severity, end).
+- **Forecast panel:** built from the stored rows' `;`-separated hourly and daily lists, with HTC's colour icons (`LocalStateResources.getConditionResourceId_Color`) and condition names (`WeatherText.getConditionText`).
+- **Flip click:** `assets/flip_click.wav`, synthesised by `flipdown/make_click.py` (no HTC asset). `wav` is in `apktool.yml`'s `doNotCompress`, so `SoundPool` can open it.
+
 ### Startup ANR fix
 
 The widget's provider used to start the flip clock directly in its `onCreate`. The clock code queries the provider itself. Because the provider wasn't published yet, Android created another instance, whose `onCreate` did the same thing, about 110 levels deep. Every cold start took 20–40 s of CPU and ended in a "failed to complete startup" ANR. That showed up as a blank widget after restarts, dead taps and laggy settings.
@@ -163,13 +182,15 @@ To build it yourself:
    python3 source/flipdown/build_layouts.py HTC-WeatherClock-10.10.1059527-android36-v1.2.6-breezy.apk apktool-project-breezy
    ```
    It reads the compiled layouts from a v1.2.6 APK and writes the compiled layouts, anims and half digits into `apktool-project-breezy/res`.
-4. **Generate the manifest:**
+4. **Rebuild the icon and temperature layouts and the click:**
    ```sh
-   python3 source/tools/breezy_manifest.py <1.2.4 project>/AndroidManifest.xml apktool-project-breezy/AndroidManifest.xml
+   python3 source/flipdown/build_weather_change.py HTC-WeatherClock-10.10.1059527-android36-v1.2.6-breezy.apk apktool-project-breezy
+   python3 source/flipdown/make_click.py apktool-project-breezy
    ```
+   The manifest is generated by the build script (`tools/breezy_manifest.py` from the 1.2.4 project's manifest).
 5. **Build:**
    ```sh
-   ./build-breezy.sh      # → ../HTC-WeatherClock-v1.2.7-breezy.apk
+   ./build-breezy.sh      # → ../HTC-WeatherClock-v1.2.8-breezy.apk (--debug: test hooks kept, *-debug.apk)
    ```
    `breezybridge/src` is compiled into `classes3.dex`. `breezybridge/stubs` are compile-only stand-ins for the smali classes the Java code calls; they aren't dexed. The APK is signed with uber-apk-signer's debug key, the same key as the earlier builds, so it installs over them.
 

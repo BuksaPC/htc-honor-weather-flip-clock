@@ -1,6 +1,8 @@
 """Turns the 1.2.4 (Honor) binary manifest into the Breezy edition's.
 
-usage: breezy_manifest.py <in AndroidManifest.xml> <out AndroidManifest.xml>
+usage: breezy_manifest.py <in AndroidManifest.xml> <out AndroidManifest.xml> [--debug]
+
+--debug keeps FlipClockTicker exported, for the adb test hooks (ClockLog INFLATE_TEST / CASCADE_TEST).
 """
 import os
 import sys
@@ -14,15 +16,16 @@ DROP_PERMISSIONS = [
     'android.permission.ACCESS_FINE_LOCATION',
     'android.permission.ACCESS_BACKGROUND_LOCATION',
     # Only the unused ClockTickService (dropped below) needed these; nothing takes wake locks.
+    # (POST_NOTIFICATIONS stays: WeatherNotification.)
     'android.permission.FOREGROUND_SERVICE',
     'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
-    'android.permission.POST_NOTIFICATIONS',
     'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
     'android.permission.WAKE_LOCK',
 ]
 OPENMETEO = 'com.htc.widget.weatherclock.openmeteo.'
 
 src, dst = sys.argv[1:3]
+DEBUG = '--debug' in sys.argv[3:]
 a = Axml(open(src, 'rb').read())
 strings = a.pool.strings
 
@@ -55,6 +58,8 @@ def set_bool(i, attr_name, value):
 # Nothing outside the app needs these: the ticker gets its own alarms and system broadcasts (which reach
 # non-exported receivers), and the two activities are the earlier modder's adb test screens.
 for tag, name in [('receiver', 'FlipClockTicker'), ('activity', 'FlipStyleActivity'), ('activity', 'ClockPulseActivity')]:
+    if DEBUG and name == 'FlipClockTicker':
+        continue
     for i in a.find(tag, name=OPENMETEO + name):
         set_bool(i, 'exported', False)
 # Backups would carry the saved coordinates off the phone.
@@ -96,6 +101,13 @@ for name in ['android.permission.SYSTEM_ALERT_WINDOW', 'android.permission.PACKA
 home = a.element('intent', [], [a.element('action', [('name', 'android.intent.action.MAIN')]),
                                 a.element('category', [('name', 'android.intent.category.HOME')])])
 a.insert_before_end(a.find('queries')[0], home)
+
+# Alarms and jobs again right after an update (UpdateReceiver), and the unlock & battery check screen.
+upd = a.element('receiver', [('name', OPENMETEO + 'UpdateReceiver'), ('exported', False)], [
+    a.element('intent-filter', [], [a.element('action', [('name', 'android.intent.action.MY_PACKAGE_REPLACED')])])])
+a.insert_before_end(a.find('application')[0], upd)
+diag = a.element('activity', [('name', OPENMETEO + 'DiagnosticsActivity'), ('exported', False)])
+a.insert_before_end(a.find('application')[0], diag)
 
 # The weather widgets' settings screen (HtcClockSetting hands weather widgets over to it).
 settings = a.element('activity', [('name', OPENMETEO + 'WeatherSettingsActivity'), ('exported', False)])

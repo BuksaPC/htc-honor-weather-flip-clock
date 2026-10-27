@@ -102,9 +102,12 @@ public final class WeatherAnim {
         WindowManager.LayoutParams lp = w.getAttributes();
         preferFastestRefresh(Build.VERSION.SDK_INT >= 30 ? a.getDisplay() : a.getWindowManager().getDefaultDisplay(), lp);
         w.setAttributes(lp);
+        final boolean forecast = BreezyWeather.tapMode(a) == BreezyWeather.TAP_ANIMATION_FORECAST;
         final Player player = new Player(a, in.getSourceBounds(),
                 BreezyWeather.animationSound(a) ? soundFor(code) : null, tapped -> {
-            if (tapped) {
+            if (forecast) {
+                ForecastPanel.show(a, () -> openWeather(a, in));
+            } else if (tapped) {
                 openWeather(a, in);
             } else {
                 a.finish();
@@ -148,7 +151,15 @@ public final class WeatherAnim {
         try {
             if (sOverlay != null) return;
             int code = sShown >= 0 ? sShown : app.getSharedPreferences("breezy", 0).getInt("shown_condition", -1);
-            if (code < 0) return;
+            if (code < 0) {
+                // No weather widget drawn yet (only clock widgets): the stored current condition.
+                org.json.JSONObject row = BreezyWeather.mainRow(app);
+                code = row == null ? -1 : Integer.parseInt(row.optString("curConditionId", "-1"));
+            }
+            if (code < 0) {
+                ClockLog.tick(app, "UNLOCK_WEATHER no weather yet");
+                return;
+            }
             BreezyWeather.loadSunPlace(app);
             code = BreezyWeather.isDay(code < 33) ? toDay(code) : toNight(code);
             String name = sceneFor(app, code);
