@@ -34,15 +34,26 @@ for i in a.find('receiver', name=OPENMETEO + 'WeatherMotion$Receiver'):
 
 # Package visibility for Breezy (the Honor edition's entry), and the version name.
 rename('com.hihonor.android.totemweather', 'org.breezyweather')
-rename('10.10.1059527-android36-v1.2.4', '10.10.1059527-android36-v1.2.6-breezy')
+rename('10.10.1059527-android36-v1.2.4', '10.10.1059527-android36-v1.2.7-breezy')
 
 perm = a.element('uses-permission', [('name', 'org.breezyweather.READ_PROVIDER')])
+last = a.find('uses-permission')[-1]
+a.nodes[a.end_of(last) + 1:a.end_of(last) + 1] = perm
+
+# Exact flip-clock minute ticks without the user granting "Alarms & reminders": USE_EXACT_ALARM (API 33+) is
+# granted at install. Without exact alarms Android may deliver the minute tick up to ~45 s late.
+perm = a.element('uses-permission', [('name', 'android.permission.USE_EXACT_ALARM')])
 last = a.find('uses-permission')[-1]
 a.nodes[a.end_of(last) + 1:a.end_of(last) + 1] = perm
 
 receiver = a.element('receiver', [('name', OPENMETEO + 'BreezyUpdateReceiver'), ('exported', True)], [
     a.element('intent-filter', [], [a.element('action', [('name', 'org.breezyweather.ACTION_UPDATE_NOTIFIER')])])])
 a.insert_before_end(a.find('application')[0], receiver)
+
+# Watches for the lock screen going away after SCREEN_ON, for the Sense unlock flip (USER_PRESENT arrives late).
+watch = a.element('service', [('name', OPENMETEO + 'UnlockWatchJob'), ('permission', 'android.permission.BIND_JOB_SERVICE'),
+                              ('exported', False)])
+a.insert_before_end(a.find('application')[0], watch)
 
 # The weather widgets' settings screen (HtcClockSetting hands weather widgets over to it).
 settings = a.element('activity', [('name', OPENMETEO + 'WeatherSettingsActivity'), ('exported', False)])

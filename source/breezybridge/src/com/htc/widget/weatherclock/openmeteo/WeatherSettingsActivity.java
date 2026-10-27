@@ -124,6 +124,10 @@ public class WeatherSettingsActivity extends Activity {
             OpenMeteoBridge.requestSync(this, true);
         }));
 
+        header("Clock");
+        mList.addView(toggle("Flip the clock when unlocking (as on HTC Sense)", FlipStyle.unlockFlip(this),
+                on -> FlipStyle.setUnlockFlip(this, on)));
+
         header("Tapping the weather");
         mList.addView(radios(new String[]{"Play the Sense weather animation", "Open Breezy Weather"},
                 BreezyWeather.tapOpensBreezy(this) ? 1 : 0, i -> BreezyWeather.setTapOpensBreezy(this, i == 1)));

@@ -6,7 +6,7 @@ It works on any phone with **Android 7.0 or newer**.
 
 | | |
 |---|---|
-| **Output** | `HTC-WeatherClock-v1.2.6-breezy.apk` (version `10.10.1059527-android36-v1.2.6-breezy`) |
+| **Output** | `HTC-WeatherClock-v1.2.7-breezy.apk` (version `10.10.1059527-android36-v1.2.7-breezy`) |
 | **Needs** | Breezy Weather 6.x ([F-Droid](https://f-droid.org/packages/org.breezyweather/) or [GitHub](https://github.com/breezy-weather/breezy-weather/releases)) |
 | **Root / adb** | Not needed |
 | **Network** | The widget has **no internet permission**. Breezy does the fetching |
@@ -58,6 +58,12 @@ When you add a widget, it's set to the Breezy location and added straight away, 
 - **`AccuWeatherOnlineSearchHelper.textSearching`:** now calls `BreezyWeather.searchCities`.
 - **`AddCity.isNetworkAvailable`:** always true, because the search is local.
 - **`WeatherBase`:** the weather tap passes the condition; the city name opens the widget settings again; "location off" opens the Breezy setup.
+- **v1.2.7, flip clock:**
+  - **`FlipClockTicker`:** the minute alarm is always armed. It no longer cancels on `SCREEN_OFF` or when not interactive. Each broadcast first calls `ClockLog.tick` and `FlipAnimV3.onAction`.
+  - **`FlipAnim.play` / `isPlaying`:** go to `FlipAnimV3`.
+  - **`FlipAnimV1` / `FlipAnimV2` `pushFrame`:** the base shows the new digits under the falling flap. They're unused now.
+  - **`FlipStyle.smali`:** removed. It's in Java now, and always V3.
+  - **`FlipTickJob.onStartJob`:** logs.
 - **`WeatherBar.apply`:** draws the setup hint.
 - **`WeatherBase.setWeatherClick`:** also calls `WeatherAnim.setTemperatureClick`, so the temperature views open Breezy.
 - **`HtcClockSetting.onCreate`:** hands weather widgets to `WeatherSettingsActivity`. The manifest declares the new activity.
@@ -100,6 +106,40 @@ Measured on an Honor MBH-N49 (Android 16) over 25 h on battery, including a lot 
 
 Each minute tick costs about 25 ms of CPU while the screen is on.
 
+### Flip clock (v1.2.7)
+
+**HTC's original.** The Sense 3 clock widget (`HtcClock3DWidget`) drew the flip in 3D: `DigitControl` and `HtcDigitalClock42View` in its code, the `tile_flip_anim` timeline in `Clock_weather_4x2.m10`.
+- **The flap** turns 0–180° about the hinge over 10 frames at 29.97 fps, eased: 0, 5, 19, 39, 63, 90, 117, 141, 161, 175, 180°. The old top half is its front (frames 0–5) and the new bottom half its back (frames 5–10).
+- **Speed:** a time change plays at speed 0.5 (0.67 s). On unlock (`prepareAnimation` at the lock screen, `startAnimation` when the home screen is back) the cards are set an hour and two minutes back, then the hour flips once at speed 0.5 and the minute twice at speed 1.0 (0.33 s each).
+
+**The flaps are played by the launcher.** A widget can't animate itself. The earlier modder's V1/V2 pushed a new frame dozens of times per flip, and stuttered whenever the process was frozen. Instead:
+- **The layouts.** `source/flipdown/build_layouts.py` rebuilds the 4x2 hour and minute card layouts. Each card gets flap copies of itself: the card face from `specific_weather_clock_4x2_digital_tab`, plus the card's digit row aligned to the card, so the flap digits sit exactly on the real ones.
+  - T: the old top half, which folds onto the hinge.
+  - B: the old bottom half, static.
+  - N: the new bottom half, which drops from the hinge.
+  - T2/N2 and T3/N3: the same at double speed, the second pair delayed, for the unlock's two quick minute flips.
+- **The animations.** Each flap is a single-child `ViewFlipper`, and `setDisplayedChild(0)` restarts its in-animation.
+  - The fold's height follows t⁴ and the drop's 1−(1−t)³. Those curves match the flap's projected height through the scene's camera frame by frame. A 5% widening averages the perspective.
+  - The anims overwrite unused anim resources (`flip_in`, `flip_out`, `leftmost`, `rightmost`, `mf_window_no`, `common_gallery_filmstrip_entry`, `slide_in_right2`, `slide_in_up`). The extra views use ids that no widget layout uses.
+- **The half digits.** `clock_weather_N_top`/`_bot` are rewritten as full-size digits with the other half transparent, cut at the hinge.
+- **The build step.** The script dumps the compiled layouts with `aapt2 dump xmltree`, turns them back into source XML and compiles them with `aapt2 link --stable-ids` (pinned to the APK's resource IDs) and `--min-sdk-version 24`. Without that option, aapt2 moves every attribute into a `layout-v1` copy.
+- **`FlipAnimV3.java`:** one partial update per flip. It sets the base digits, then fills, shows and restarts the flaps. A second update hides them afterwards.
+
+**The host replays the merged actions.** The launcher re-applies every merged partial action on each later update. A replayed `setDisplayedChild` would restart the flip, so flaps are only visible during a flip, and a whole unlock sequence goes out as one update.
+
+**Minute ticks.**
+- **Exact alarms without asking.** The manifest declares `USE_EXACT_ALARM`, which is granted at install. Without exact alarms, Android delivered the minute alarm up to about 45 s late. Together with Honor freezing the process, that was the clock lag.
+- **Always armed.** The non-wakeup minute alarm is now armed even when the screen is off, so it fires the moment the screen comes back.
+
+**Unlock on Honor.**
+- **The problem:** Honor holds `USER_PRESENT` and `SCREEN_OFF` back from a cached process, and manifest receivers don't get them at all. On face unlock, Honor also sends `USER_PRESENT` while the lock screen is still up.
+- **`UnlockWatchJob`:** started on screen-on, it keeps the process un-cached while the screen is on.
+  - While the lock screen is up it polls the keyguard (100 ms). After that it only waits for `SCREEN_OFF`.
+  - On screen-off it waits for the panel to go off, so the change doesn't show during the fade, and sets the cards back.
+  - The first run is an expedited job. Renewals are regular jobs.
+- **The launcher applies updates late.** Honor's launcher applies widget updates only about a second after it shows again. The unlock flip therefore starts about a second after the home screen appears, and the set-back must already be in place when the launcher stops drawing.
+- **Turning it off:** the widget settings have "Flip the clock when unlocking" (`flip_clock_setup` / `unlock_flip`).
+
 ### Startup ANR fix
 
 The widget's provider used to start the flip clock directly in its `onCreate`. The clock code queries the provider itself. Because the provider wasn't published yet, Android created another instance, whose `onCreate` did the same thing, about 110 levels deep. Every cold start took 20–40 s of CPU and ended in a "failed to complete startup" ANR. That showed up as a blank widget after restarts, dead taps and laggy settings.
@@ -114,16 +154,23 @@ To build it yourself:
 
 1. **Decode the base APK.** Run `apktool d -r` on `HTC-WeatherClock-10.10.1059527-android36-v1.2.4.apk` into `apktool-project-breezy/`. Apply the smali changes listed above, and copy in the baked `assets/weather_anim/` (see [ANIMATIONS.md](ANIMATIONS.md)).
 2. **Get the tools.** Put apktool 2.12.1 (`tools/apktool.jar`) and uber-apk-signer 1.3.0 (`tools/signer.jar`) next to the build script. You also need JDK 11+ and the Android SDK (build-tools 36.0.0, platform `android-36`).
-3. **Generate the manifest:**
+3. **Rebuild the clock card layouts** (needs Pillow):
+   ```sh
+   python3 source/flipdown/build_layouts.py HTC-WeatherClock-10.10.1059527-android36-v1.2.6-breezy.apk apktool-project-breezy
+   ```
+   It reads the compiled layouts from a v1.2.6 APK and writes the compiled layouts, anims and half digits into `apktool-project-breezy/res`.
+4. **Generate the manifest:**
    ```sh
    python3 source/tools/breezy_manifest.py <1.2.4 project>/AndroidManifest.xml apktool-project-breezy/AndroidManifest.xml
    ```
-4. **Build:**
+5. **Build:**
    ```sh
-   ./build-breezy.sh      # → ../HTC-WeatherClock-v1.2.6-breezy.apk
+   ./build-breezy.sh      # → ../HTC-WeatherClock-v1.2.7-breezy.apk
    ```
    `breezybridge/src` is compiled into `classes3.dex`. `breezybridge/stubs` are compile-only stand-ins for the smali classes the Java code calls; they aren't dexed. The APK is signed with uber-apk-signer's debug key, the same key as the earlier builds, so it installs over them.
 
 ## Troubleshooting
+
+`Android/data/com.htc.widget.weatherclock/files/clock_ticks.txt` (v1.2.7) logs every flip-clock event: each minute tick, screen on and off, unlock, and the flip. Each line shows what the clock shows and how far behind it is. It's capped at 256 KB.
 
 `Android/data/com.htc.widget.weatherclock/files/breezy_status.txt` logs each sync ("synced 1 rows from Breezy: London, 8°C, 15°/7° code 35"), startup time, weather taps and errors. It's there because some phones (Honor, for example) hide app logs.
