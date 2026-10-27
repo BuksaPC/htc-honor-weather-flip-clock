@@ -64,6 +64,10 @@ When you add a widget, it's set to the Breezy location and added straight away, 
   - **`FlipAnimV1` / `FlipAnimV2` `pushFrame`:** the base shows the new digits under the falling flap. They're unused now.
   - **`FlipStyle.smali`:** removed. It's in Java now, and always V3.
   - **`FlipTickJob.onStartJob`:** logs.
+- **v1.2.8:**
+  - **`FlipClockTicker.armHandler` / `FlipClockTicker$1.run`:** the handler pulse (once a second, every 50 ms near each minute) only runs while a catch-up is pending. The exact minute alarm keeps the time.
+  - **`FlipClockTicker.schedule`:** no longer enqueues `FlipTickJob` (it was a fourth minute tick).
+  - **Manifest:** `FlipClockTicker`, `FlipStyleActivity` and `ClockPulseActivity` aren't exported. `allowBackup` is off. The unused `ClockTickService` and the permissions only it needed (foreground service, notifications, battery-optimisation request, wake lock) are gone. New: `ScreenWatch` receiver, `SYSTEM_ALERT_WINDOW`, `PACKAGE_USAGE_STATS`, and a `<queries>` entry for launchers.
 - **`WeatherBar.apply`:** draws the setup hint.
 - **`WeatherBase.setWeatherClick`:** also calls `WeatherAnim.setTemperatureClick`, so the temperature views open Breezy.
 - **`HtcClockSetting.onCreate`:** hands weather widgets to `WeatherSettingsActivity`. The manifest declares the new activity.
@@ -171,6 +175,6 @@ To build it yourself:
 
 ## Troubleshooting
 
-`Android/data/com.htc.widget.weatherclock/files/clock_ticks.txt` (v1.2.7) logs every flip-clock event: each minute tick, screen on and off, unlock, and the flip. Each line shows what the clock shows and how far behind it is. It's capped at 256 KB.
+`Android/data/com.htc.widget.weatherclock/files/clock_ticks.txt` logs every flip-clock event: each minute tick, screen on and off, unlock, and the flip. Each line shows what the clock shows and how far behind it is. It's capped at 256 KB. Since v1.2.8 it's only written with **Debug log** on in the widget settings (Troubleshooting).
 
-`Android/data/com.htc.widget.weatherclock/files/breezy_status.txt` logs each sync ("synced 1 rows from Breezy: London, 8°C, 15°/7° code 35"), startup time, weather taps and errors. It's there because some phones (Honor, for example) hide app logs.
+`Android/data/com.htc.widget.weatherclock/files/breezy_status.txt` logs each sync ("synced 1 rows from Breezy: 8°C, 15°/7° code 35"), startup time, weather taps and errors. Since v1.2.8 it leaves place names out. It's there because some phones (Honor, for example) hide app logs.

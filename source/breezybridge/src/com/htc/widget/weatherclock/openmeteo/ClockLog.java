@@ -11,16 +11,37 @@ import java.util.Locale;
 /**
  * Flip-clock diagnostics: one line per tick (alarm, TIME_TICK, screen/unlock, job) with the ticker's state,
  * in Android/data/com.htc.widget.weatherclock/files/clock_ticks.txt. Gaps in it show which tick source died.
+ * Only with "Debug log" on in the widget settings: otherwise it would write to storage every minute.
  */
 final class ClockLog {
     private static final long MAX_BYTES = 256 * 1024;
+    private static final String PREFS = "flip_clock_setup", KEY = "debug_log";
+    private static volatile Boolean sOn;
 
     private ClockLog() {
     }
 
+    static boolean enabled(Context ctx) {
+        Boolean on = sOn;
+        if (on == null) {
+            try {
+                on = ctx.getSharedPreferences(PREFS, 0).getBoolean(KEY, false);
+            } catch (Throwable th) {
+                on = false;
+            }
+            sOn = on;
+        }
+        return on;
+    }
+
+    static void setEnabled(Context ctx, boolean on) {
+        sOn = on;
+        ctx.getSharedPreferences(PREFS, 0).edit().putBoolean(KEY, on).apply();
+    }
+
     static synchronized void tick(Context ctx, String action) {
         try {
-            if (ctx == null) {
+            if (ctx == null || !enabled(ctx)) {
                 return;
             }
             String what = action == null ? "null" : action.substring(action.lastIndexOf('.') + 1);

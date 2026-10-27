@@ -10,10 +10,16 @@ import android.content.Intent;
  * intent, but all it does is re-read local data.
  */
 public class BreezyUpdateReceiver extends BroadcastReceiver {
+    /** Breezy sends one per refresh; more often than this is someone else repeating it. */
+    private static final long MIN_INTERVAL_MS = 15_000;
+    private static long sLast;
+
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (intent != null && BreezyWeather.UPDATE_ACTION.equals(intent.getAction())) {
-            OpenMeteoBridge.requestSync(context, true);
-        }
+        if (intent == null || !BreezyWeather.UPDATE_ACTION.equals(intent.getAction())) return;
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (sLast != 0 && now - sLast < MIN_INTERVAL_MS) return;
+        sLast = now;
+        OpenMeteoBridge.requestSync(context, true);
     }
 }

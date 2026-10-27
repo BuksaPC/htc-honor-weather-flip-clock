@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Canvas;
+import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
@@ -41,6 +42,7 @@ public final class WeatherAnim {
     public static Intent getIntent(Context ctx, Intent fallback, int conditionId, boolean day) {
         if (ctx == null) return fallback;
         int code = day ? toDay(conditionId) : toNight(conditionId);
+        rememberShown(ctx, code);
         Intent i = new Intent().setClassName(ctx, TAP_ACTIVITY);
         i.setAction(ACTION + code);
         i.putExtra(EXTRA_CODE, code);
@@ -97,19 +99,101 @@ public final class WeatherAnim {
         }
         Window w = a.getWindow();
         w.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
-        preferFastestRefresh(a, w);
-        final Player player = new Player(a, in, BreezyWeather.animationSound(a) ? soundFor(code) : null);
+        WindowManager.LayoutParams lp = w.getAttributes();
+        preferFastestRefresh(Build.VERSION.SDK_INT >= 30 ? a.getDisplay() : a.getWindowManager().getDefaultDisplay(), lp);
+        w.setAttributes(lp);
+        final Player player = new Player(a, in.getSourceBounds(),
+                BreezyWeather.animationSound(a) ? soundFor(code) : null, tapped -> {
+            if (tapped) {
+                openWeather(a, in);
+            } else {
+                a.finish();
+                a.overridePendingTransition(0, 0);
+            }
+        });
         a.setContentView(player);
+        load(a, name, player, () -> openWeather(a, in));
+        return true;
+    }
+
+    private static void load(Context ctx, String name, Player player, Runnable failed) {
         new Thread(() -> {
             try {
-                final AnimScene s = AnimScene.load(a.getAssets(), name);
+                final AnimScene s = AnimScene.load(ctx.getAssets(), name);
                 player.post(() -> player.start(s));
             } catch (Exception e) {
                 android.util.Log.w(BreezyWeather.TAG, "animation " + name + " failed", e);
-                player.post(() -> openWeather(a, in));
+                player.post(failed);
             }
         }, "weather-anim").start();
-        return true;
+    }
+
+    // ---- After unlocking (UnlockWeather) ----
+
+    private static volatile int sShown = -1;
+    private static Player sOverlay;
+
+    /** The condition the widget shows (its icon), for the animation after unlocking. */
+    private static void rememberShown(Context ctx, int code) {
+        if (code == sShown) return;
+        sShown = code;
+        ctx.getSharedPreferences("breezy", 0).edit().putInt("shown_condition", code).apply();
+    }
+
+    /**
+     * The animation over the home screen in an overlay window ("Display over other apps"), as an app in the
+     * background can't start an activity. It doesn't take focus (keys go to the launcher); a touch ends it.
+     */
+    static void playOverlay(Context app) {
+        try {
+            if (sOverlay != null) return;
+            int code = sShown >= 0 ? sShown : app.getSharedPreferences("breezy", 0).getInt("shown_condition", -1);
+            if (code < 0) return;
+            BreezyWeather.loadSunPlace(app);
+            code = BreezyWeather.isDay(code < 33) ? toDay(code) : toNight(code);
+            String name = sceneFor(app, code);
+            if (name == null) return;
+            Display d = ((android.hardware.display.DisplayManager) app.getSystemService(Context.DISPLAY_SERVICE))
+                    .getDisplay(Display.DEFAULT_DISPLAY);
+            final Context ctx = Build.VERSION.SDK_INT >= 30
+                    ? app.createWindowContext(d, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null) : app;
+            final WindowManager wm = (WindowManager) ctx.getSystemService(Context.WINDOW_SERVICE);
+            WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
+                    Build.VERSION.SDK_INT >= 26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                            : WindowManager.LayoutParams.TYPE_PHONE,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                            | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                            | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                    PixelFormat.TRANSLUCENT);
+            if (Build.VERSION.SDK_INT >= 28) {
+                lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            }
+            preferFastestRefresh(d, lp);
+            final Player[] self = new Player[1];
+            self[0] = new Player(ctx, null, BreezyWeather.animationSound(app) ? soundFor(code) : null,
+                    tapped -> removeOverlay(wm, self[0]));
+            sOverlay = self[0];
+            wm.addView(self[0], lp);
+            load(ctx, name, self[0], () -> removeOverlay(wm, self[0]));
+        } catch (Throwable th) {
+            android.util.Log.w(BreezyWeather.TAG, "unlock animation failed", th);
+            sOverlay = null;
+        }
+    }
+
+    /** The screen went off: no animation left over for the next unlock. */
+    static void stopOverlay() {
+        Player p = sOverlay;
+        if (p != null) p.post(() -> p.end(false));
+    }
+
+    private static void removeOverlay(WindowManager wm, Player p) {
+        try {
+            wm.removeView(p);
+        } catch (Throwable ignored) {
+        }
+        if (sOverlay == p) sOverlay = null;
     }
 
     private static void openWeather(Activity a, Intent in) {
@@ -210,26 +294,26 @@ public final class WeatherAnim {
     }
 
     /** Asks for the display's highest refresh rate at the current resolution while the animation runs. */
-    private static void preferFastestRefresh(Activity a, Window w) {
+    private static void preferFastestRefresh(Display d, WindowManager.LayoutParams lp) {
         try {
-            Display d = Build.VERSION.SDK_INT >= 30 ? a.getDisplay() : a.getWindowManager().getDefaultDisplay();
             if (d == null) return;
             Display.Mode cur = d.getMode(), best = cur;
             for (Display.Mode m : d.getSupportedModes()) {
                 if (m.getPhysicalWidth() == cur.getPhysicalWidth() && m.getPhysicalHeight() == cur.getPhysicalHeight()
                         && m.getRefreshRate() > best.getRefreshRate()) best = m;
             }
-            WindowManager.LayoutParams lp = w.getAttributes();
             lp.preferredDisplayModeId = best.getModeId();
             lp.preferredRefreshRate = best.getRefreshRate();
-            w.setAttributes(lp);
         } catch (Exception ignored) {
         }
     }
 
+    private interface End { void ended(boolean tapped); }
+
     private static final class Player extends View {
-        private final Activity activity;
-        private final Intent intent;
+        private final Context context;
+        private final Rect tap;
+        private final End onEnd;
         private final String sound;
         private AnimScene scene;
         private MediaPlayer media;
@@ -239,10 +323,11 @@ public final class WeatherAnim {
         private float scale = 1f, ox, oy;
         private boolean placed;
 
-        Player(Activity a, Intent in, String sound) {
-            super(a);
-            activity = a;
-            intent = in;
+        Player(Context c, Rect tap, String sound, End onEnd) {
+            super(c);
+            context = c;
+            this.tap = tap;
+            this.onEnd = onEnd;
             this.sound = sound;
             if (Build.VERSION.SDK_INT >= 35) setRequestedFrameRate(View.REQUESTED_FRAME_RATE_CATEGORY_HIGH);
         }
@@ -258,7 +343,6 @@ public final class WeatherAnim {
             scale = Math.min(w, h * 0.62f) / s.width;
             ox = (w - s.width * scale) / 2f;
             oy = 0f;
-            Rect tap = intent.getSourceBounds();
             if (tap != null && !tap.isEmpty()) {
                 int[] at = new int[2];
                 getLocationOnScreen(at);
@@ -278,9 +362,9 @@ public final class WeatherAnim {
 
         private void playSound() {
             if (sound == null) return;
-            AudioManager am = (AudioManager) activity.getSystemService(Context.AUDIO_SERVICE);
+            AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
             if (am == null || am.getRingerMode() != AudioManager.RINGER_MODE_NORMAL) return;
-            try (AssetFileDescriptor fd = activity.getAssets().openFd(AnimScene.DIR + "sound/sound_" + sound + ".flac")) {
+            try (AssetFileDescriptor fd = context.getAssets().openFd(AnimScene.DIR + "sound/sound_" + sound + ".flac")) {
                 media = new MediaPlayer();
                 media.setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
@@ -306,7 +390,7 @@ public final class WeatherAnim {
             float t = (System.nanoTime() - t0) / 1e9f;
             float fade = t <= endS ? 1f : 1f - (t - endS) / FADE_S;
             if (fade <= 0f) {
-                finish(false);
+                end(false);
                 return;
             }
             if (media != null && fade < 1f) {
@@ -325,20 +409,15 @@ public final class WeatherAnim {
 
         @Override
         public boolean onTouchEvent(MotionEvent e) {
-            if (e.getAction() == MotionEvent.ACTION_UP) finish(true);
+            if (e.getAction() == MotionEvent.ACTION_UP) end(true);
             return true;
         }
 
-        private void finish(boolean openWeather) {
+        void end(boolean tapped) {
             if (done) return;
             done = true;
             releaseSound();
-            if (openWeather) {
-                openWeather(activity, intent);
-            } else {
-                activity.finish();
-                activity.overridePendingTransition(0, 0);
-            }
+            onEnd.ended(tapped);
         }
 
         @Override

@@ -86,6 +86,10 @@ final class FlipAnimV3 {
     private static boolean sWaitingOff;
     private static final java.util.List<Runnable> sOffThen = new java.util.ArrayList<>();
     private static volatile long sScreenOnAt;
+    /** What onAction last handled: the screen coming on (SCREEN_ON) or going off; null before either. */
+    private static volatile Boolean sScreenOn;
+    private static volatile boolean sWeatherDone;
+    private static boolean sLoaded;
     private static Handler sHandler;
 
     private FlipAnimV3() {
@@ -112,13 +116,14 @@ final class FlipAnimV3 {
     /** A time change: each card whose value changed flips once, from what it shows to the new value. */
     static void play(Context context, int oldH, int oldM, int newH, int newM, Runnable onDone) {
         Context app = app(context);
-        if (beginIntro(app)) {
+        if (beginIntro(app, false)) {
             // The ticker's catch-up right after an unlock (fingerprint from a dark screen): the unlock flip.
             intro(app, onDone);
+            weather(app, false);
             return;
         }
         if (sPrepared && !locked(app)) {
-            sPrepared = false;  // a normal flip after a missed unlock flip: from what the cards really show
+            setPrepared(app, false);  // a normal flip after a missed unlock flip: from what the cards really show
             oldH = -1;
         }
         boolean flipped = false;
@@ -138,44 +143,70 @@ final class FlipAnimV3 {
     }
 
     /**
-     * Called for every broadcast the ticker gets. Sense played its unlock flip when the home screen came back
-     * after the lock screen. Here UnlockWatchJob watches for the keyguard to go after SCREEN_ON (USER_PRESENT
-     * arrives late, or early on Honor's face unlock), and a catch-up flip the ticker starts once unlocked
-     * becomes the unlock flip.
+     * Called for every broadcast the ticker gets, and by ScreenWatch. Sense played its unlock flip when the home
+     * screen came back after the lock screen. Here UnlockWatchJob and ScreenWatch watch for the keyguard to go
+     * after the screen comes on (USER_PRESENT arrives late, or early on Honor's face unlock), and a catch-up flip
+     * the ticker starts once unlocked becomes the unlock flip.
+     *
+     * Android 14+ holds SCREEN_ON/SCREEN_OFF back from a cached (frozen) app, and Honor and Samsung freeze
+     * widget apps quickly, so neither may arrive. Every call therefore compares the screen with what was last
+     * handled and catches up on a missed change; ScreenWatch's alarm, set when the screen goes off, is
+     * delivered as soon as the phone wakes, even to a frozen app, so screen-on is always noticed.
      *
      * Sense first set the cards back an hour and two minutes while the lock screen hid them (prepare(), here at
-     * SCREEN_OFF). Honor's launcher applies widget updates only about a second after it shows again, so after
+     * screen-off). Honor's launcher applies widget updates only about a second after it shows again, so after
      * unlocking the earlier time shows for that second, then the cards flip forward. The flip can be turned off
      * in the widget settings (FlipStyle.unlockFlip).
      */
     static void onAction(Context context, String action) {
         try {
             Context app = app(context);
-            boolean on = FlipStyle.useV3(app) && FlipStyle.unlockFlip(app);
-            if ("android.intent.action.SCREEN_OFF".equals(action)) {
-                screenGoingOff(app, null);
-            } else if ("android.intent.action.SCREEN_ON".equals(action)) {
-                sIntroDone = false;
-                sScreenOnAt = SystemClock.elapsedRealtime();
-                if (on) {
-                    if (locked(app)) {
-                        prepare(app);  // again, for the current minute
-                    }
-                    UnlockWatchJob.start(app);
+            load(app);
+            boolean screen = isScreenOn(app);
+            if ("android.intent.action.SCREEN_OFF".equals(action) || (!screen && !Boolean.FALSE.equals(sScreenOn))) {
+                if (!screen) {
+                    screenGoingOff(app, null);
                 }
-            } else if (on && !locked(app) && isScreenOn(app)) {
+            } else if ("android.intent.action.SCREEN_ON".equals(action) || (screen && !Boolean.TRUE.equals(sScreenOn))) {
+                if (screen) {
+                    screenOn(app, "android.intent.action.SCREEN_ON".equals(action) || ScreenWatch.ACTION.equals(action));
+                }
+            } else if (watching(app) && !locked(app) && screen) {
                 UnlockWatchJob.start(app);  // e.g. after an update or a restart: watch for the screen going off
             }
             if ("android.intent.action.USER_PRESENT".equals(action)) {
                 // Honor sends this on face unlock while the lock screen is still up: only once it's really gone.
                 if (!locked(app)) {
-                    unlocked(app);
+                    unlocked(app, false);
                 } else {
                     UnlockWatchJob.start(app);
                 }
             }
         } catch (Throwable th) {
             Log.w(TAG, "onAction failed", th);
+        }
+    }
+
+    /** The unlock flip or the unlock weather animation is on, so unlocking needs watching. */
+    static boolean watching(Context app) {
+        return (FlipStyle.useV3(app) && FlipStyle.unlockFlip(app)) || UnlockWeather.enabled(app);
+    }
+
+    /**
+     * The screen came on (SCREEN_ON, or noticed later): set back for this minute if locked, watch for unlocking.
+     * {@code justNow}: told so by SCREEN_ON or ScreenWatch, not noticed later by some other broadcast, which may
+     * come long after unlocking (a fresh process while the phone is in use): then no weather animation.
+     */
+    private static void screenOn(Context app, boolean justNow) {
+        sScreenOn = true;
+        sIntroDone = false;
+        sWeatherDone = !justNow && !locked(app);
+        sScreenOnAt = SystemClock.elapsedRealtime();
+        if (watching(app)) {
+            if (FlipStyle.useV3(app) && FlipStyle.unlockFlip(app) && locked(app)) {
+                prepare(app);  // again, for the current minute
+            }
+            UnlockWatchJob.start(app);
         }
     }
 
@@ -234,20 +265,43 @@ final class FlipAnimV3 {
     /** Sets the cards back while nothing shows, as a fingerprint unlock turns the screen on already unlocked. */
     private static synchronized void screenOff(Context context) {
         Context app = app(context);
+        sScreenOn = false;
         sIntroDone = false;
+        WeatherAnim.stopOverlay();
         if (FlipStyle.useV3(app) && FlipStyle.unlockFlip(app)) {
             prepare(app);
             ClockLog.tick(app, "PREPARE");
         }
+        if (watching(app)) {
+            ScreenWatch.arm(app);
+        }
     }
 
-    /** The lock screen went away: play the unlock flip, once per screen-on. */
-    static void unlocked(Context context) {
+    /**
+     * The lock screen went away: play the unlock flip and the weather animation, once per screen-on.
+     * {@code sawLock}: the caller saw the lock screen up a moment ago, so this is the unlock itself and not
+     * something noticed later (the weather animation only plays right after unlocking).
+     */
+    static void unlocked(Context context, boolean sawLock) {
         Context app = app(context);
-        if (beginIntro(app)) {
+        if (locked(app)) {
+            return;
+        }
+        if (beginIntro(app, sawLock)) {
             intro(app, null);
-        } else if (sPrepared && !sPlaying && !locked(app)) {
+        } else if (sPrepared && !sPlaying) {
             restore(app);
+        }
+        weather(app, sawLock);
+    }
+
+    private static synchronized void weather(Context app, boolean sawLock) {
+        if (sWeatherDone || !Boolean.TRUE.equals(sScreenOn)) {
+            return;
+        }
+        sWeatherDone = true;
+        if (sawLock || SystemClock.elapsedRealtime() - sScreenOnAt < 15000) {
+            UnlockWeather.play(app);
         }
     }
 
@@ -267,12 +321,36 @@ final class FlipAnimV3 {
         paint(app, displayHour(c, is24), m);
         sApp = app;
         sPreparedAt = SystemClock.elapsedRealtime();
-        sPrepared = true;
+        setPrepared(app, true);
+    }
+
+    /**
+     * The set-back is kept in prefs too: Honor and Samsung may kill the process while the screen is off, and
+     * the cards still show the earlier time after that.
+     */
+    private static void setPrepared(Context app, boolean on) {
+        if (sPrepared == on) {
+            return;
+        }
+        sPrepared = on;
+        app.getSharedPreferences("flip_clock_setup", 0).edit().putBoolean("prepared", on).apply();
+    }
+
+    /** Once per process: a set-back from before the process was restarted. */
+    private static synchronized void load(Context app) {
+        if (sLoaded) {
+            return;
+        }
+        sLoaded = true;
+        if (app.getSharedPreferences("flip_clock_setup", 0).getBoolean("prepared", false)) {
+            sApp = app;
+            sPrepared = true;
+        }
     }
 
     /** The cards set back but no unlock flip came (turned off, or too late): just show the right time. */
     private static void restore(Context app) {
-        sPrepared = false;
+        setPrepared(app, false);
         boolean is24 = DateFormat.is24HourFormat(app);
         Calendar c = Calendar.getInstance();
         paint(app, displayHour(c, is24), c.get(Calendar.MINUTE));
@@ -295,10 +373,15 @@ final class FlipAnimV3 {
         intro(app(context), null);
     }
 
-    /** True once per screen-on, within a minute of it, when the keyguard is gone and nothing is playing. */
-    private static synchronized boolean beginIntro(Context app) {
-        if (sIntroDone || sPlaying || !FlipStyle.useV3(app) || !FlipStyle.unlockFlip(app) || locked(app)
-                || SystemClock.elapsedRealtime() - sScreenOnAt > 60000) {
+    /**
+     * True once per screen-on when the cards are set back, the keyguard is gone and nothing is playing, right
+     * after unlocking ({@code sawLock}) or within a minute of the screen coming on. Without the set-back (missed
+     * screen-off) there's no flip: it would jump from the right time back and forth.
+     */
+    private static synchronized boolean beginIntro(Context app, boolean sawLock) {
+        load(app);
+        if (sIntroDone || sPlaying || !sPrepared || !FlipStyle.useV3(app) || !FlipStyle.unlockFlip(app)
+                || locked(app) || (!sawLock && SystemClock.elapsedRealtime() - sScreenOnAt > 60000)) {
             return false;
         }
         sIntroDone = true;
@@ -306,18 +389,15 @@ final class FlipAnimV3 {
         return true;
     }
 
-    private static boolean isScreenOn(Context app) {
+    static boolean isScreenOn(Context app) {
         android.os.PowerManager pm = (android.os.PowerManager) app.getSystemService(Context.POWER_SERVICE);
         return pm == null || pm.isInteractive();
     }
 
-    private static boolean locked(Context app) {
+    static boolean locked(Context app) {
         KeyguardManager km = (KeyguardManager) app.getSystemService(Context.KEYGUARD_SERVICE);
         return km != null && km.isKeyguardLocked();
     }
-
-
-
 
     /**
      * Sense's unlock flip (HtcDigitalClock42View.prepareAnimation/startAnimation): the hour card flips once from
@@ -341,7 +421,7 @@ final class FlipAnimV3 {
             flipped = card(rv, res, pkg, HOUR, true, hour(h0), hour(h));
             flipped |= twice(rv, res, pkg, MINUTE, minute((m + 58) % 60), minute((m + 59) % 60), minute(m));
             sPlaying = flipped;
-            sPrepared = false;
+            setPrepared(app, false);
             markShown(app, h, m);
             push(app, rv);
         } catch (Throwable th) {

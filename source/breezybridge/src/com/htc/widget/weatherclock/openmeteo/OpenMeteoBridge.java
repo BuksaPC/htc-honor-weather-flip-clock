@@ -57,6 +57,8 @@ public class OpenMeteoBridge extends ContentProvider {
 
     private static final Object SYNC_LOCK = new Object();
     private static volatile boolean sSyncing;
+    /** A forced sync asked for while one was running (e.g. the location changed): run again after it. */
+    private static volatile boolean sSyncAgain;
     private static volatile long sLastSyncMs;
     private Context mAttached;
 
@@ -102,8 +104,18 @@ public class OpenMeteoBridge extends ContentProvider {
         return toCursor(loadArray(KEY_LOCS), locationColumns(), projection, selection, args);
     }
 
+    /*
+     * insert/update/delete read, change and write whole JSON tables, as the sync thread does: both hold
+     * SYNC_LOCK so neither loses the other's change.
+     */
     @Override
     public Uri insert(Uri uri, ContentValues values) {
+        synchronized (SYNC_LOCK) {
+            return insertLocked(uri, values);
+        }
+    }
+
+    private Uri insertLocked(Uri uri, ContentValues values) {
         if (values == null) return uri;
         String path = pathOf(uri);
         if ("setting".equals(path)) {
@@ -135,6 +147,12 @@ public class OpenMeteoBridge extends ContentProvider {
 
     @Override
     public int delete(Uri uri, String selection, String[] args) {
+        synchronized (SYNC_LOCK) {
+            return deleteLocked(uri, selection, args);
+        }
+    }
+
+    private int deleteLocked(Uri uri, String selection, String[] args) {
         String key = tableFor(pathOf(uri));
         JSONArray rows = loadArray(key), kept = new JSONArray();
         int n = 0;
@@ -152,6 +170,12 @@ public class OpenMeteoBridge extends ContentProvider {
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] args) {
+        synchronized (SYNC_LOCK) {
+            return updateLocked(uri, values, selection, args);
+        }
+    }
+
+    private int updateLocked(Uri uri, ContentValues values, String selection, String[] args) {
         if (values == null) return 0;
         String path = pathOf(uri), key = tableFor(path);
         if ("location".equals(path) && !"cur".equals(str(values, "code")) && values.containsKey("code")) {
@@ -206,7 +230,11 @@ public class OpenMeteoBridge extends ContentProvider {
     }
 
     static void requestSync(Context context, boolean force) {
-        if (context == null || sSyncing) return;
+        if (context == null) return;
+        if (sSyncing) {
+            if (force) sSyncAgain = true;
+            return;
+        }
         long now = System.currentTimeMillis();
         if (!force && now - sLastSyncMs < MIN_SYNC_INTERVAL_MS) return;
         sLastSyncMs = now;
@@ -228,6 +256,10 @@ public class OpenMeteoBridge extends ContentProvider {
             } finally {
                 sSyncing = false;
             }
+        }
+        if (sSyncAgain) {
+            sSyncAgain = false;
+            requestSync(context, true);
         }
     }
 
@@ -277,7 +309,7 @@ public class OpenMeteoBridge extends ContentProvider {
             try {
                 if (w != null) row = BreezyWeather.toRow(ctx, p, w, k[0], k[1], k[2]);
             } catch (Exception e) {
-                BreezyWeather.log(ctx, "row failed for " + p.name + ": " + e);
+                BreezyWeather.log(ctx, "row failed: " + e);
             }
             if (row == null) row = previousRow(data, k);
             if (row != null) out.put(row);
@@ -287,7 +319,10 @@ public class OpenMeteoBridge extends ContentProvider {
         String summary = main.name + (first == null ? "" : ", " + first.optString("curTempC") + "°C, "
                 + first.optString("highTempC") + "°/" + first.optString("lowTempC") + "°");
         BreezyWeather.setLastSync(ctx, summary);
-        BreezyWeather.log(ctx, "synced " + out.length() + " rows from Breezy: " + summary
+        // The log leaves the place name out (people share it in bug reports); the settings screen shows it.
+        BreezyWeather.log(ctx, "synced " + out.length() + " rows from Breezy: " + (first == null ? ""
+                : first.optString("curTempC") + "°C, " + first.optString("highTempC") + "°/"
+                + first.optString("lowTempC") + "°")
                 + (first == null ? "" : " code " + first.optString("curConditionId")
                 + " (Breezy " + first.optString("breezyCode") + ")"));
 
@@ -423,6 +458,7 @@ public class OpenMeteoBridge extends ContentProvider {
         try {
             while (c.moveToNext()) {
                 if (at != null) {
+                    if (!isNumber(c.getString(5)) || !isNumber(c.getString(6))) continue;
                     double lat = Double.parseDouble(c.getString(5)), lon = Double.parseDouble(c.getString(6));
                     if (Math.abs(lat - at[0]) > 0.05 || Math.abs(lon - at[1]) > 0.05) continue;
                 }

@@ -88,11 +88,14 @@ public class UnlockWatchJob extends JobService {
         };
         registerReceiver(mScreenOff, new IntentFilter(Intent.ACTION_SCREEN_OFF));
         mHandler.post(new Runnable() {
+            private boolean mSawLock;
+
             @Override
             public void run() {
                 if (km == null || !km.isKeyguardLocked()) {
-                    FlipAnimV3.unlocked(UnlockWatchJob.this);  // once per screen-on; then just wait
+                    FlipAnimV3.unlocked(UnlockWatchJob.this, mSawLock);  // once per screen-on; then just wait
                 } else if (pm == null || pm.isInteractive()) {
+                    mSawLock = true;
                     mHandler.postDelayed(this, POLL_MS);
                 }
             }

@@ -100,7 +100,7 @@ See [release-notes-v1.2.4-breezy.md](release-notes-v1.2.4-breezy.md). In short:
 ## FAQ
 
 **The clock is behind.**
-Update to v1.2.7-breezy. If it still happens, send `Android/data/com.htc.widget.weatherclock/files/clock_ticks.txt`: it logs every minute tick and how far behind the clock was.
+Update to the latest version. If it still happens, turn on **Debug log** in the widget settings (Troubleshooting), use the phone for a while, and send `Android/data/com.htc.widget.weatherclock/files/clock_ticks.txt`: it logs every minute tick and how far behind the clock was.
 
 **On unlock the clock shows an earlier time for a moment.**
 That's the HTC unlock flip: Sense set the cards back an hour and two minutes, then flipped them forward. Honor's home screen applies widget updates about a second after it appears, so the flip starts then. Turn it off in the widget settings under **Clock**.
@@ -121,7 +121,7 @@ Not yet. It's on the list.
 Update to v1.2.6-breezy: v1.2.5 fixed the animations, and v1.2.6 fixes the widget icon around sunrise and sunset. If it still happens, send `breezy_status.txt` (below). Each sync line shows the code Breezy sent, e.g. `code 7 (Breezy cloudy day)`.
 
 **Where are the logs?**
-`Android/data/com.htc.widget.weatherclock/files/breezy_status.txt` on the phone. It records syncs ("synced 1 rows from Breezy: London, 8°C, 15°/7° code 35"), weather taps and errors. Some phones, Honor for example, hide app logs from `adb logcat`.
+`Android/data/com.htc.widget.weatherclock/files/breezy_status.txt` on the phone. It records syncs ("synced 1 rows from Breezy: 8°C, 15°/7° code 35"), weather taps and errors. Since v1.2.8 it doesn't contain place names, but check what you share anyway. The clock log, `clock_ticks.txt`, is only written with **Debug log** on. Some phones, Honor for example, hide app logs from `adb logcat`.
 
 ## How it works
 

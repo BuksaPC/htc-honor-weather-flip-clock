@@ -253,8 +253,12 @@ public final class BreezyWeather {
             while (c != null && c.moveToNext()) {
                 Place p = new Place();
                 p.id = text(c, "id");
-                p.lat = Double.parseDouble(text(c, "latitude"));
-                p.lon = Double.parseDouble(text(c, "longitude"));
+                try {
+                    p.lat = Double.parseDouble(text(c, "latitude"));
+                    p.lon = Double.parseDouble(text(c, "longitude"));
+                } catch (NumberFormatException e) {
+                    continue;  // a location without coordinates: skip it, keep the others
+                }
                 p.current = "1".equals(text(c, "is_current_position"));
                 p.timezone = or(text(c, "timezone"), TimeZone.getDefault().getID());
                 p.name = or(text(c, "custom_name"), or(text(c, "city"), or(text(c, "district"), text(c, "admin2"))));
@@ -298,7 +302,7 @@ public final class BreezyWeather {
             byte[] blob = c.getBlob(c.getColumnIndexOrThrow("weather"));
             return blob == null ? null : new JSONObject(gunzip(blob));
         } catch (Exception e) {
-            log(ctx, "weather failed for " + p.name + ": " + e);
+            log(ctx, "weather failed: " + e);  // no place names in the log: people share it in bug reports
             return null;
         }
     }

@@ -13,6 +13,12 @@ DROP_PERMISSIONS = [
     'android.permission.ACCESS_COARSE_LOCATION',
     'android.permission.ACCESS_FINE_LOCATION',
     'android.permission.ACCESS_BACKGROUND_LOCATION',
+    # Only the unused ClockTickService (dropped below) needed these; nothing takes wake locks.
+    'android.permission.FOREGROUND_SERVICE',
+    'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
+    'android.permission.POST_NOTIFICATIONS',
+    'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+    'android.permission.WAKE_LOCK',
 ]
 OPENMETEO = 'com.htc.widget.weatherclock.openmeteo.'
 
@@ -31,10 +37,32 @@ for perm in DROP_PERMISSIONS:
         a.remove(i)
 for i in a.find('receiver', name=OPENMETEO + 'WeatherMotion$Receiver'):
     a.remove(i)
+for i in a.find('service', name=OPENMETEO + 'ClockTickService'):
+    a.remove(i)
+
+TYPE_INT_BOOLEAN = 0x12
+
+
+def set_bool(i, attr_name, value):
+    """Sets an existing android: boolean attribute of the element at node i."""
+    for at in a.nodes[i].attrs:
+        if a.s(at[1]) == attr_name:
+            at[2], at[5], at[6] = 0xFFFFFFFF, TYPE_INT_BOOLEAN, 0xFFFFFFFF if value else 0
+            return
+    raise KeyError(attr_name)
+
+
+# Nothing outside the app needs these: the ticker gets its own alarms and system broadcasts (which reach
+# non-exported receivers), and the two activities are the earlier modder's adb test screens.
+for tag, name in [('receiver', 'FlipClockTicker'), ('activity', 'FlipStyleActivity'), ('activity', 'ClockPulseActivity')]:
+    for i in a.find(tag, name=OPENMETEO + name):
+        set_bool(i, 'exported', False)
+# Backups would carry the saved coordinates off the phone.
+set_bool(a.find('application')[0], 'allowBackup', False)
 
 # Package visibility for Breezy (the Honor edition's entry), and the version name.
 rename('com.hihonor.android.totemweather', 'org.breezyweather')
-rename('10.10.1059527-android36-v1.2.4', '10.10.1059527-android36-v1.2.7-breezy')
+rename('10.10.1059527-android36-v1.2.4', '10.10.1059527-android36-v1.2.8-breezy')
 
 perm = a.element('uses-permission', [('name', 'org.breezyweather.READ_PROVIDER')])
 last = a.find('uses-permission')[-1]
@@ -54,6 +82,20 @@ a.insert_before_end(a.find('application')[0], receiver)
 watch = a.element('service', [('name', OPENMETEO + 'UnlockWatchJob'), ('permission', 'android.permission.BIND_JOB_SERVICE'),
                               ('exported', False)])
 a.insert_before_end(a.find('application')[0], watch)
+
+# Screen-on notice by a non-wakeup alarm, delivered at wake even to a frozen app (ScreenWatch).
+watch = a.element('receiver', [('name', OPENMETEO + 'ScreenWatch'), ('exported', False)])
+a.insert_before_end(a.find('application')[0], watch)
+
+# The weather animation after unlocking (UnlockWeather): an overlay window, shown only over the home screen,
+# which usage access tells apart (both granted by the user in the settings). Seeing the launchers needs a query.
+for name in ['android.permission.SYSTEM_ALERT_WINDOW', 'android.permission.PACKAGE_USAGE_STATS']:
+    perm = a.element('uses-permission', [('name', name)])
+    last = a.find('uses-permission')[-1]
+    a.nodes[a.end_of(last) + 1:a.end_of(last) + 1] = perm
+home = a.element('intent', [], [a.element('action', [('name', 'android.intent.action.MAIN')]),
+                                a.element('category', [('name', 'android.intent.category.HOME')])])
+a.insert_before_end(a.find('queries')[0], home)
 
 # The weather widgets' settings screen (HtcClockSetting hands weather widgets over to it).
 settings = a.element('activity', [('name', OPENMETEO + 'WeatherSettingsActivity'), ('exported', False)])

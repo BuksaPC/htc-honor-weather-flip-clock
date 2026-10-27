@@ -37,6 +37,9 @@ public class WeatherSettingsActivity extends Activity {
     private LinearLayout mList;
     private TextView mStatus;
     private Button mStatusAction;
+    private Switch mUnlockWeather;
+    private TextView mUnlockPerm;
+    private Button mUnlockAllow;
     private int mAccent;
 
     /**
@@ -72,6 +75,7 @@ public class WeatherSettingsActivity extends Activity {
     protected void onResume() {
         super.onResume();
         refreshStatus();
+        refreshUnlockWeather();
     }
 
     /** Points the widget at "current location" and reports success to the launcher. */
@@ -124,9 +128,21 @@ public class WeatherSettingsActivity extends Activity {
             OpenMeteoBridge.requestSync(this, true);
         }));
 
-        header("Clock");
-        mList.addView(toggle("Flip the clock when unlocking (as on HTC Sense)", FlipStyle.unlockFlip(this),
+        header("After unlocking (as on HTC Sense)");
+        mList.addView(toggle("Flip the clock", FlipStyle.unlockFlip(this),
                 on -> FlipStyle.setUnlockFlip(this, on)));
+        mUnlockWeather = toggle("Play the weather animation over the home screen", UnlockWeather.enabled(this), on -> {
+            UnlockWeather.setEnabled(this, on);
+            refreshUnlockWeather();
+            if (on) allowUnlockWeather();
+        });
+        mList.addView(mUnlockWeather);
+        mUnlockPerm = text("", 13, false);
+        mUnlockPerm.setAlpha(0.7f);
+        mUnlockPerm.setPadding(dp(8), 0, 0, 0);
+        mList.addView(mUnlockPerm);
+        mUnlockAllow = button("Allow", v -> allowUnlockWeather());
+        mList.addView(mUnlockAllow);
 
         header("Tapping the weather");
         mList.addView(radios(new String[]{"Play the Sense weather animation", "Open Breezy Weather"},
@@ -144,6 +160,15 @@ public class WeatherSettingsActivity extends Activity {
                 + "Background updates. For instant updates, turn on Weather Clock Widget in Breezy → Settings → "
                 + "External modules → Data sharing → Send Breezy Weather Location Update Notifier data.", 14, false);
         mList.addView(upd);
+
+        header("Troubleshooting");
+        mList.addView(toggle("Debug log (for bug reports)", ClockLog.enabled(this), on -> ClockLog.setEnabled(this, on)));
+        TextView log = text("Writes every clock tick, screen change and flip to Android/data/"
+                + "com.htc.widget.weatherclock/files/clock_ticks.txt. Leave it off otherwise: it writes every minute.",
+                13, false);
+        log.setAlpha(0.7f);
+        log.setPadding(dp(8), 0, 0, 0);
+        mList.addView(log);
 
         Button done = button("Done", v -> finish());
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
@@ -177,6 +202,34 @@ public class WeatherSettingsActivity extends Activity {
         mStatusAction.setOnClickListener(s == BreezyWeather.State.READY
                 ? v -> BreezyWeather.open(this)
                 : v -> startActivity(new Intent(this, ClockSetupActivity.class)));
+    }
+
+    /** Which permission the unlock animation still needs, while it's on. */
+    private void refreshUnlockWeather() {
+        if (mUnlockPerm == null) return;
+        boolean on = UnlockWeather.enabled(this);
+        boolean overlay = UnlockWeather.canOverlay(this), usage = UnlockWeather.hasUsageAccess(this);
+        boolean missing = on && (!overlay || !usage);
+        mUnlockPerm.setVisibility(missing ? View.VISIBLE : View.GONE);
+        mUnlockAllow.setVisibility(missing ? View.VISIBLE : View.GONE);
+        if (!missing) return;
+        mUnlockPerm.setText(!overlay
+                ? "Needs \"Display over other apps\" for Weather Clock: the animation plays in a window over the home screen."
+                : "Needs \"Usage access\" for Weather Clock: it only plays when you unlock to the home screen, never over an app.");
+        mUnlockAllow.setText(!overlay ? "Allow display over other apps" : "Allow usage access");
+    }
+
+    private void allowUnlockWeather() {
+        Intent i = UnlockWeather.missingPermission(this);
+        if (i == null) return;
+        try {
+            startActivity(i);
+        } catch (Exception e) {
+            try {
+                startActivity(new Intent(i.getAction()));  // some phones don't take the package
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     private void openBreezySettings() {
