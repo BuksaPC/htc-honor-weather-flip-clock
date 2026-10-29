@@ -123,6 +123,7 @@ public final class WeatherAnim {
         new Thread(() -> {
             try {
                 final AnimScene s = AnimScene.load(ctx.getAssets(), name);
+                player.prepareSound();
                 player.post(() -> player.start(s));
             } catch (Exception e) {
                 android.util.Log.w(BreezyWeather.TAG, "animation " + name + " failed", e);
@@ -362,30 +363,38 @@ public final class WeatherAnim {
             }
         }
 
+        /**
+         * The clock starts at the first frame drawn, not when the scene is loaded: the window may take a while
+         * to show (more so over the home screen right after unlocking), and the start would be skipped.
+         */
         void start(AnimScene s) {
             if (done) return;
             scene = s;
             endS = Math.max(6f, s.buildSeconds() + 3.5f);
-            t0 = System.nanoTime();
-            playSound();
+            t0 = 0;
             postInvalidateOnAnimation();
         }
 
-        private void playSound() {
+        /** On the loading thread: the sound ready to start with the first frame. */
+        void prepareSound() {
             if (sound == null) return;
             AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
             if (am == null || am.getRingerMode() != AudioManager.RINGER_MODE_NORMAL) return;
+            MediaPlayer mp = new MediaPlayer();
             try (AssetFileDescriptor fd = context.getAssets().openFd(AnimScene.DIR + "sound/sound_" + sound + ".flac")) {
-                media = new MediaPlayer();
-                media.setAudioAttributes(new AudioAttributes.Builder()
+                mp.setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
-                media.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
-                media.setOnPreparedListener(MediaPlayer::start);
-                media.prepareAsync();
+                mp.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
+                mp.prepare();
             } catch (Exception e) {
-                releaseSound();
+                mp.release();
+                return;
             }
+            post(() -> {
+                if (done) mp.release();
+                else media = mp;
+            });
         }
 
         private void releaseSound() {
@@ -398,6 +407,16 @@ public final class WeatherAnim {
         @Override
         protected void onDraw(Canvas c) {
             if (scene == null || done) return;
+            if (t0 == 0) {
+                t0 = System.nanoTime();
+                if (media != null) {
+                    try {
+                        media.start();
+                    } catch (Exception e) {
+                        releaseSound();
+                    }
+                }
+            }
             float t = (System.nanoTime() - t0) / 1e9f;
             float fade = t <= endS ? 1f : 1f - (t - endS) / FADE_S;
             if (fade <= 0f) {

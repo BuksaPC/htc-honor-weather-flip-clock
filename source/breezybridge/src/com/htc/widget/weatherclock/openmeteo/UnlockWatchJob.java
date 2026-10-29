@@ -26,6 +26,10 @@ import android.util.Log;
  *     recognises the user, while the lock screen stays up until a swipe), a few seconds at most;
  *   - after that it only waits for SCREEN_OFF, sets the cards back (FlipAnimV3.screenGoingOff) and ends.
  * A run lasts at most RUN_MS (under the job run-time limit); the next one is scheduled when it ends.
+ *
+ * A running job holds the CPU awake. That costs nothing while the screen is on, but a lost SCREEN_OFF would
+ * keep the phone awake with the screen off until the run ends, so the screen is also checked every
+ * OFF_CHECK_MS.
  */
 public class UnlockWatchJob extends JobService {
     private static final String TAG = "UnlockWatchJob";
@@ -38,6 +42,8 @@ public class UnlockWatchJob extends JobService {
      */
     private static final long EJ_RUN_MS = 150000;
     private static final long RUN_MS = 8 * 60000;
+    /** Checks for the screen having gone off without a SCREEN_OFF. */
+    private static final long OFF_CHECK_MS = 10000;
 
     private final Handler mHandler = new Handler(Looper.getMainLooper());
     private JobParameters mParams;
@@ -100,6 +106,17 @@ public class UnlockWatchJob extends JobService {
                 }
             }
         });
+        mHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (pm != null && !pm.isInteractive()) {
+                    ClockLog.tick(UnlockWatchJob.this, "WATCH no SCREEN_OFF");
+                    mScreenOff.onReceive(UnlockWatchJob.this, null);
+                } else {
+                    mHandler.postDelayed(this, OFF_CHECK_MS);
+                }
+            }
+        }, OFF_CHECK_MS);
         boolean ej = Build.VERSION.SDK_INT >= 31 && params.isExpeditedJob();
         mHandler.postDelayed(new Runnable() {
             @Override

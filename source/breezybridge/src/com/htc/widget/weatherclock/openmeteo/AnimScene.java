@@ -118,6 +118,7 @@ final class AnimScene {
             try (InputStream t = assets.open(file)) {
                 tex[i] = BitmapFactory.decodeStream(t);
             }
+            if (tex[i] != null) tex[i].prepareToDraw();  // uploaded to the GPU now, not during the first frames
         }
         n = in.readUnsignedShort();
         parent = new int[n];

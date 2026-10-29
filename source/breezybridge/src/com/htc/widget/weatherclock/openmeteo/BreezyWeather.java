@@ -200,8 +200,10 @@ public final class BreezyWeather {
             if (s == State.READY) {
                 WeatherChange.apply(ctx, rv);
                 alertLine(ctx, rv);
+                WidgetForecast.apply(ctx, rv);
                 return;
             }
+            WidgetForecast.apply(ctx, rv);  // hidden: no weather to show
             String pkg = ctx.getPackageName();
             int date = ctx.getResources().getIdentifier("week_date", "id", pkg);
             int block = ctx.getResources().getIdentifier("temp_info_block", "id", pkg);
@@ -243,7 +245,7 @@ public final class BreezyWeather {
             if (t.isEmpty()) return;
             String label = "Feels like ";
             android.text.SpannableString s = new android.text.SpannableString(label + t);
-            s.setSpan(new android.text.style.RelativeSizeSpan(0.22f), 0, label.length(), 0);
+            s.setSpan(new android.text.style.RelativeSizeSpan(0.4f), 0, label.length(), 0);
             rv.setTextViewText(id, s);
         } catch (Throwable t) {
             Log.w(TAG, "feels-like label failed", t);
@@ -452,6 +454,7 @@ public final class BreezyWeather {
             Sun sun = Sun.at(p.lat, p.lon, d.optLong("date") + 12 * 3600_000L, tz);
             f.add("fstName", dayName.format(date));
             f.add("fstDate", shortDate.format(date));
+            f.add("fstEpochDate", d.optLong("date") / 1000);
             f.add("fstConditionId", accu(code(dd), true));
             f.add("fstNightConditionId", accu(code(nn), false));
             f.add("fstHighTempC", Math.round(hi));
@@ -549,7 +552,7 @@ public final class BreezyWeather {
         r.put("curWinddirection", compass(wind == null ? 0 : wind.optDouble("degree", 0)));
         r.put("curWindspeed", String.valueOf(Math.round(value(wind, "speed", 0))));
         r.put("curVisibility", String.valueOf(Math.max(1, Math.round(value(cur, "visibility", 10)))));
-        for (String k : new String[]{"fstName", "fstDate", "fstConditionId", "fstHighTempC", "fstHighTempF",
+        for (String k : new String[]{"fstName", "fstDate", "fstEpochDate", "fstConditionId", "fstHighTempC", "fstHighTempF",
                 "fstLowTempC", "fstLowTempF", "fstSunrise", "fstSunset", "fstFeelHighTempC", "fstFeelHighTempF",
                 "fstFeelLowTempC", "fstFeelLowTempF", "fstNightConditionId", "fstPrecip", "fstNightPrecip",
                 "hourName", "hourConditionId", "hourTempC", "hourTempF", "hourFeelTempC", "hourFeelTempF",

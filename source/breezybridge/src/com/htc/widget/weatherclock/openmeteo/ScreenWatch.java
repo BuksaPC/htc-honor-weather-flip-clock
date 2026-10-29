@@ -27,11 +27,22 @@ public class ScreenWatch extends BroadcastReceiver {
     private static final long FIRST_MS = 1000;
     /** Again after a background wake: later, as Android holds non-wakeup alarms back while the screen is off. */
     private static final long AGAIN_MS = 5000;
+    /**
+     * Again once the phone has stayed awake with the screen off for a minute (music, navigation, a download):
+     * the alarm would otherwise come every 5 s for as long as that lasts. Turning the screen on is then
+     * noticed up to this much later (the ticker's minute alarm may notice it first).
+     */
+    private static final long AWAKE_AGAIN_MS = 20000;
+    private static final int AWAKE_STREAK = 12;
+    private static long sLastOff;
+    private static int sStreak;
     private static final long POLL_MS = 100;
     /** A receiver may run about 10 s; UnlockWatchJob carries on after that. */
     private static final long WATCH_MS = 8000;
 
     static void arm(Context ctx) {
+        sStreak = 0;
+        sLastOff = 0;
         arm(ctx, FIRST_MS);
     }
 
@@ -61,17 +72,24 @@ public class ScreenWatch extends BroadcastReceiver {
         if (!FlipAnimV3.watching(app)) {
             return;
         }
+        long now = SystemClock.elapsedRealtime();
         if (!FlipAnimV3.isScreenOn(app)) {
-            arm(app, AGAIN_MS);
+            // On time again (within twice the wait): the phone stayed awake since the last one.
+            long wait = sStreak >= AWAKE_STREAK ? AWAKE_AGAIN_MS : AGAIN_MS;
+            sStreak = sLastOff > 0 && now - sLastOff < 2 * wait ? sStreak + 1 : 0;
+            sLastOff = now;
+            arm(app, sStreak >= AWAKE_STREAK ? AWAKE_AGAIN_MS : AGAIN_MS);
             return;
         }
+        sStreak = 0;
+        sLastOff = 0;
         if (!FlipAnimV3.locked(app)) {
             FlipAnimV3.unlocked(app, false);  // fingerprint from a dark screen: on already unlocked
             return;
         }
         final PendingResult result = goAsync();
         final Handler h = new Handler(Looper.getMainLooper());
-        final long until = SystemClock.elapsedRealtime() + WATCH_MS;
+        final long until = now + WATCH_MS;
         h.postDelayed(new Runnable() {
             @Override
             public void run() {

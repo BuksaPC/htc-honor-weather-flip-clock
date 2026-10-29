@@ -331,6 +331,7 @@ public class OpenMeteoBridge extends ContentProvider {
         sendAppBroadcast(ctx, new Intent(RESULT_ACTION).putExtra("status", 1));
         refreshWidgets(ctx);
         WeatherNotification.update(ctx);
+        RainWarning.check(ctx);
     }
 
     private static void refreshWidgets(Context ctx) {

@@ -65,6 +65,8 @@ final class ClockLog {
                 what += " " + inflateTest(ctx) + " / apply: " + applyTest(ctx);
             } else if ("CASCADE_TEST".equals(what)) {
                 cascadeTest(ctx);
+            } else if ("RAIN_TEST".equals(what)) {
+                RainWarning.test(ctx);
             }
             long nowMin = System.currentTimeMillis() / 60000;
             PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);

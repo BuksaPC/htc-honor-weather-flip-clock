@@ -83,6 +83,8 @@ final class FlipAnimV3 {
     private static volatile boolean sPrepared;
     private static volatile Context sApp;
     private static volatile long sPreparedAt;
+    /** The hour and minute the cards were set back to (prepare()), -1 when unknown. */
+    private static volatile int sPrepH = -1, sPrepM = -1;
     private static boolean sWaitingOff;
     private static final java.util.List<Runnable> sOffThen = new java.util.ArrayList<>();
     private static volatile long sScreenOnAt;
@@ -187,9 +189,13 @@ final class FlipAnimV3 {
         }
     }
 
-    /** The unlock flip or the unlock weather animation is on, so unlocking needs watching. */
+    /**
+     * The unlock weather animation is on, or the unlock flip with a clock on the home screen, so unlocking needs
+     * watching (UnlockWatchJob, ScreenWatch). Nothing runs for it otherwise.
+     */
     static boolean watching(Context app) {
-        return (FlipStyle.useV3(app) && FlipStyle.unlockFlip(app)) || UnlockWeather.enabled(app);
+        return UnlockWeather.enabled(app)
+                || (FlipStyle.useV3(app) && FlipStyle.unlockFlip(app) && FlipClockTicker.hasActiveWidgets(app));
     }
 
     /**
@@ -318,9 +324,12 @@ final class FlipAnimV3 {
         Calendar c = Calendar.getInstance();
         int m = (c.get(Calendar.MINUTE) + 58) % 60;
         c.add(Calendar.HOUR_OF_DAY, -1);
-        paint(app, displayHour(c, is24), m);
+        int h = displayHour(c, is24);
+        paint(app, h, m);
         sApp = app;
         sPreparedAt = SystemClock.elapsedRealtime();
+        sPrepH = h;
+        sPrepM = m;
         setPrepared(app, true);
     }
 
@@ -329,11 +338,12 @@ final class FlipAnimV3 {
      * the cards still show the earlier time after that.
      */
     private static void setPrepared(Context app, boolean on) {
-        if (sPrepared == on) {
+        if (sPrepared == on && !on) {  // a new set-back is stored again: its digits changed
             return;
         }
         sPrepared = on;
-        app.getSharedPreferences("flip_clock_setup", 0).edit().putBoolean("prepared", on).apply();
+        app.getSharedPreferences("flip_clock_setup", 0).edit().putBoolean("prepared", on)
+                .putInt("prepared_h", on ? sPrepH : -1).putInt("prepared_m", on ? sPrepM : -1).apply();
     }
 
     /** Once per process: a set-back from before the process was restarted. */
@@ -342,8 +352,11 @@ final class FlipAnimV3 {
             return;
         }
         sLoaded = true;
-        if (app.getSharedPreferences("flip_clock_setup", 0).getBoolean("prepared", false)) {
+        android.content.SharedPreferences p = app.getSharedPreferences("flip_clock_setup", 0);
+        if (p.getBoolean("prepared", false)) {
             sApp = app;
+            sPrepH = p.getInt("prepared_h", -1);
+            sPrepM = p.getInt("prepared_m", -1);
             sPrepared = true;
         }
     }
@@ -412,6 +425,9 @@ final class FlipAnimV3 {
      * Sense's unlock flip (HtcDigitalClock42View.prepareAnimation/startAnimation): the hour card flips once from
      * the previous hour, the minute card twice in a row, quickly, from two minutes earlier
      * (DigitControl.setDestNumber(m, 2)), both landing on the current time.
+     * The flips start from the digits the cards were set back to, which the launcher shows until it applies
+     * this update: set back at screen-off, a fingerprint unlock or a while on the lock screen leaves them minutes
+     * behind "now minus an hour and two minutes", and starting from those would make the digits jump first.
      * The ticker is told the new time is shown, so its own catch-up doesn't follow.
      */
     private static void intro(Context app, Runnable onDone) {
@@ -422,17 +438,24 @@ final class FlipAnimV3 {
             int h = displayHour(c, is24);
             int m = c.get(Calendar.MINUTE);
             c.add(Calendar.HOUR_OF_DAY, -1);
-            int h0 = displayHour(c, is24);
+            int h0 = displayHour(c, is24), m0 = (m + 58) % 60, mid = (m + 59) % 60;
+            if (sPrepared && sPrepH >= 0 && sPrepH != h) {
+                h0 = sPrepH;
+            }
+            if (sPrepared && sPrepM >= 0 && sPrepM != m && sPrepM != mid) {
+                m0 = sPrepM;
+            }
             Resources res = app.getResources();
             String pkg = app.getPackageName();
             RemoteViews rv = views(res, pkg);
             base(rv, res, pkg, h, m);
             flipped = card(rv, res, pkg, HOUR, true, hour(h0), hour(h));
-            flipped |= twice(rv, res, pkg, MINUTE, minute((m + 58) % 60), minute((m + 59) % 60), minute(m));
+            flipped |= twice(rv, res, pkg, MINUTE, minute(m0), minute(mid), minute(m));
             sPlaying = flipped;
             setPrepared(app, false);
             markShown(app, h, m);
             push(app, rv);
+            ClockLog.tick(app, "UNLOCK_FLIP from " + h0 + ":" + m0 + " via " + mid + " to " + h + ":" + m);
             FlipSound.unlock(app);
         } catch (Throwable th) {
             Log.w(TAG, "unlock flip failed", th);

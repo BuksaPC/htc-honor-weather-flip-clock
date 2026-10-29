@@ -7,7 +7,7 @@ The classic **HTC Sense flip clock and weather widget** for modern Android, with
 
 | | |
 |---|---|
-| **Latest release** | **v1.2.7-breezy**: `HTC-WeatherClock-10.10.1059527-android36-v1.2.7-breezy.apk` ([Releases](https://github.com/BuksaPC/htc-honor-weather-flip-clock/releases)) |
+| **Latest release** | **v1.2.8-breezy**: `HTC-WeatherClock-10.10.1059527-android36-v1.2.8-breezy.apk` ([Releases](https://github.com/BuksaPC/htc-honor-weather-flip-clock/releases)) |
 | **Needs** | Android 7.0+ and Breezy Weather ([F-Droid](https://f-droid.org/packages/org.breezyweather/) or [GitHub](https://github.com/breezy-weather/breezy-weather/releases)) |
 | **Root / adb** | Not needed |
 | **Internet permission** | None. Breezy fetches the weather; the widget only reads what Breezy shares on the phone |
@@ -54,8 +54,10 @@ Updating from the **Honor edition** (v1.2.3-honor)? Install over it. The `adb ap
 | After unlocking | Nothing, flip the clock (default), play the weather animation over the home screen, or both. The animation needs **Display over other apps** and **Usage access**, so it only plays on the home screen, never over an app |
 | Flip sound | A soft click with the unlock flip, only when the ringer is on and you unlock to the home screen (needs **Usage access**). Off by default |
 | Animate weather changes | When the icon or the temperature changes, the old one fades out over the new one (on by default) |
+| Show the 5-day forecast | The next five days (day, icon, high/low) on HTC's dark panel under the weather bar, as on Sense's 4x3 weather clock. Stretch the widget one row taller to see it; at 4x2 it stays hidden. Tapping it opens Breezy. Off by default |
 | Show weather alerts in place of the date | Breezy's alert in force ("⚠ Wind warning") replaces the date line while it lasts (on by default) |
-| Weather in notifications | A quiet notification with the weather, so it also shows on the lock screen. Off by default |
+| Weather in notifications | A quiet notification with the weather, so it also shows on the lock screen: a card on HTC Weather's backdrop for the conditions, with the next five days when expanded. Off by default |
+| Warn me before rain | One notification when Breezy's hourly forecast has rain, snow or a storm within two hours ("Showers around 15:00 · 70% chance"), once per wet spell. Checked when Breezy refreshes, so it adds no wake-ups. Off by default |
 | Tapping the weather | Play the Sense animation, play it and then show the forecast (next hours and days, alerts), or open Breezy |
 | Animation sound | HTC's weather sounds, only when the ringer is on |
 | Troubleshooting | **Unlock & battery check** (what the phone allows in the background, what the unlock watch saw, a copyable report) and **Debug log** |
@@ -69,13 +71,15 @@ Updating from the **Honor edition** (v1.2.3-honor)? Install over it. The `adb ap
 - **HTC's flip clock, as on Sense 3:** the flap folds down at the hinge and the new half drops into place, with HTC's own motion and timing (0.67 s per flip). On unlock the hour flips once and the minute twice, as on Sense. The home screen plays the animation itself, so it stays smooth.
 - **Unchanged:** the date line, calendar events and themes.
 
-## What's new in v1.2.7-breezy
+## What's new in v1.2.8-breezy
 
-See [release-notes-v1.2.7-breezy.md](release-notes-v1.2.7-breezy.md). In short:
+See [release-notes-v1.2.8-breezy.md](release-notes-v1.2.8-breezy.md). In short:
 
-- **The clock no longer falls behind.** It could lag minutes while you used other apps, or after unlocking: Android delivered its minute alarm late, and Honor froze the widget. The widget now gets exact alarms automatically, with nothing to turn on.
-- **HTC's real flip-down animation.** Taken from the Sense 3 clock itself: the flap folds down at the hinge and the new half drops, with HTC's timing and easing. It's played by the home screen, so there are no stutters.
-- **HTC's unlock flip.** When you unlock, the hour card flips once and the minute card twice, as on Sense. You can turn it off in the widget settings.
+- **5-day forecast on the widget**, as on Sense's 4x3 weather clock.
+- **Weather notification on HTC Weather's backdrops**, with alerts and the next five days.
+- **Warn me before rain**, and Breezy's **weather alerts** on the widget.
+- **After unlocking:** the flip, the Sense weather animation, or both. The unlock flip is now reliable on Samsung and on Android 14+.
+- **Fewer wake-ups**, no place names in logs, fewer permissions.
 
 ## v1.2.6-breezy
 
@@ -141,6 +145,7 @@ Full technical write-up: **[BREEZY.md](BREEZY.md)** (Breezy edition) and **[ANIM
 
 ## Previous releases
 
+- **v1.2.7-breezy:** clock lag fix, HTC flip-down and unlock flip. Superseded by v1.2.8-breezy (forecast, notification card, rain warning, unlock weather).
 - **v1.2.6-breezy:** the widget icon around sunrise and sunset. Superseded by v1.2.7-breezy (clock lag, HTC flip animation).
 - **v1.2.5-breezy:** day/night and animation fixes. Superseded by v1.2.6-breezy (icon around sunrise and sunset).
 - **v1.2.4-breezy:** first Breezy edition. Superseded by v1.2.5-breezy (day/night and animation fixes).

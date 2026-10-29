@@ -81,6 +81,7 @@ public class WeatherSettingsActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         WeatherNotification.update(this);  // the notification permission was just answered
+        RainWarning.check(this);
     }
 
     /** Points the widget at "current location" and reports success to the launcher. */
@@ -158,6 +159,11 @@ public class WeatherSettingsActivity extends Activity {
         header("Weather on the widget");
         mList.addView(toggle("Animate weather changes (icon and temperature)", WeatherChange.enabled(this),
                 on -> WeatherChange.setEnabled(this, on)));
+        mList.addView(toggle("Show the 5-day forecast (then stretch the widget one row taller)",
+                WidgetForecast.enabled(this), on -> {
+            WidgetForecast.setEnabled(this, on);
+            OpenMeteoBridge.requestSync(this, true);  // redraws the widgets
+        }));
         mList.addView(toggle("Show weather alerts in place of the date", BreezyWeather.alertsOnWidget(this), on -> {
             BreezyWeather.setAlertsOnWidget(this, on);
             OpenMeteoBridge.requestSync(this, true);
@@ -167,6 +173,12 @@ public class WeatherSettingsActivity extends Activity {
                 requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1);
             }
             WeatherNotification.setEnabled(this, on);
+        }));
+        mList.addView(toggle("Warn me before rain (rain, snow or storms within two hours)", RainWarning.enabled(this), on -> {
+            if (on && !WeatherNotification.permitted(this) && Build.VERSION.SDK_INT >= 33) {
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1);
+            }
+            RainWarning.setEnabled(this, on);
         }));
 
         header("Tapping the weather");

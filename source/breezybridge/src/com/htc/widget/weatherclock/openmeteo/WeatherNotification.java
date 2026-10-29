@@ -11,6 +11,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.util.Log;
+import android.widget.RemoteViews;
 
 import com.htc.lib1.weather.resource.WeatherText;
 import com.htc.widget.weatherclock.util.LocalStateResources;
@@ -20,13 +21,16 @@ import org.json.JSONObject;
 /**
  * The weather in a quiet, ongoing notification (setting "Weather in notifications", off by default), so it also
  * shows on the lock screen, as Sense's lock screen did. Updated after each sync; tapping it opens Breezy. A
- * weather alert in force becomes its title.
+ * weather alert in force becomes its title. Shown as a picture card (NotificationCard) with HTC Weather's backdrop for
+ * the condition and, expanded, the next five days.
  */
 final class WeatherNotification {
     private static final String TAG = "WeatherNotification";
     private static final String CHANNEL = "weather";
     private static final int ID = 0x8ee1;
     private static final String KEY = "weather_notification";
+    /** What the notification shows now: a sync that changes nothing leaves it alone. */
+    private static String sShown;
 
     private WeatherNotification() {
     }
@@ -55,6 +59,7 @@ final class WeatherNotification {
             if (!enabled(ctx) || !permitted(ctx) || row == null
                     || BreezyWeather.quickState(ctx) != BreezyWeather.State.READY) {
                 nm.cancel(ID);
+                sShown = null;
                 return;
             }
             if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL) == null) {
@@ -67,7 +72,8 @@ final class WeatherNotification {
             }
             boolean c = TemperatureUnit.isCelsius(ctx);
             int code = Integer.parseInt(row.optString("curConditionId", "1"));
-            code = BreezyWeather.isDay(code < 33) ? WeatherAnim.toDay(code) : WeatherAnim.toNight(code);
+            boolean day = BreezyWeather.isDay(code < 33);
+            code = day ? WeatherAnim.toDay(code) : WeatherAnim.toNight(code);
             String cond = "";
             try {
                 cond = WeatherText.getConditionText(ctx, code);
@@ -81,6 +87,12 @@ final class WeatherNotification {
             String text = (alert != null ? temp + (cond.isEmpty() ? "" : " " + cond) + " · " : "") + hiLo
                     + (place.isEmpty() ? "" : " · " + place);
 
+            // The card's days change at midnight without the weather changing.
+            String shown = code + "|" + title + "|" + text + "|" + row.optString("fstEpochDate")
+                    + row.optString(c ? "fstHighTempC" : "fstHighTempF") + row.optString(c ? "fstLowTempC" : "fstLowTempF");
+            if (shown.equals(sShown) && isShowing(nm)) {
+                return;
+            }
             Intent open = new Intent().setClassName(ctx, "com.htc.widget.weatherclock.openmeteo.CalendarTapActivity")
                     .setAction(WeatherAnim.ACTION_OPEN).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             PendingIntent pi = PendingIntent.getActivity(ctx, 0x8ee2, open,
@@ -92,16 +104,32 @@ final class WeatherNotification {
                     .setOnlyAlertOnce(true).setShowWhen(false).setVisibility(Notification.VISIBILITY_PUBLIC)
                     .setCategory(Notification.CATEGORY_STATUS);
             if (Build.VERSION.SDK_INT < 26) b.setPriority(Notification.PRIORITY_LOW);
+            RemoteViews[] card = NotificationCard.build(ctx, row, code, day, temp, cond, place, hiLo, alert);
+            if (card != null) {
+                b.setStyle(new Notification.DecoratedCustomViewStyle()).setCustomContentView(card[0])
+                        .setCustomBigContentView(card[1]);
+            }
             Bitmap big = icon != 0 ? BitmapFactory.decodeResource(ctx.getResources(), icon) : null;
             if (big != null) {
                 b.setSmallIcon(Icon.createWithBitmap(big));
-                b.setLargeIcon(big);
+                if (card == null) b.setLargeIcon(big);  // the card has its own
             } else {
                 b.setSmallIcon(ctx.getApplicationInfo().icon);
             }
             nm.notify(ID, b.build());
+            sShown = shown;
         } catch (Throwable th) {
             Log.w(TAG, "notification failed", th);
         }
+    }
+
+    private static boolean isShowing(NotificationManager nm) {
+        try {
+            for (android.service.notification.StatusBarNotification n : nm.getActiveNotifications()) {
+                if (n.getId() == ID) return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
     }
 }

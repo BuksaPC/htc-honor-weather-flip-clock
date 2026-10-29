@@ -6,7 +6,7 @@ It works on any phone with **Android 7.0 or newer**.
 
 | | |
 |---|---|
-| **Output** | `HTC-WeatherClock-v1.2.7-breezy.apk` (version `10.10.1059527-android36-v1.2.7-breezy`) |
+| **Output** | `HTC-WeatherClock-v1.2.8-breezy.apk` (version `10.10.1059527-android36-v1.2.8-breezy`) |
 | **Needs** | Breezy Weather 6.x ([F-Droid](https://f-droid.org/packages/org.breezyweather/) or [GitHub](https://github.com/breezy-weather/breezy-weather/releases)) |
 | **Root / adb** | Not needed |
 | **Network** | The widget has **no internet permission**. Breezy does the fetching |
@@ -151,16 +151,23 @@ Each minute tick costs about 25 ms of CPU while the screen is on.
 
 Android 14+ holds `SCREEN_ON`/`SCREEN_OFF` back from a frozen (cached) app, and Honor and Samsung freeze widget apps soon after the screen goes off, so the unlock flip used to depend on luck. Now:
 
-- **`ScreenWatch`:** at screen-off a non-wakeup exact alarm is set for a second later. It never wakes the phone; Android delivers it as soon as the phone wakes (at the latest when the screen comes on), and alarms reach frozen apps. Fired with the screen still off (a background wake-up), it's set again 5 s later. With the screen on it polls the lock screen for up to 8 s.
+- **`ScreenWatch`:** at screen-off a non-wakeup exact alarm is set for a second later. It never wakes the phone; Android delivers it as soon as the phone wakes (at the latest when the screen comes on), and alarms reach frozen apps. Fired with the screen still off (a background wake-up), it's set again 5 s later; once the phone has stayed awake with the screen off for a minute (music, navigation), every 20 s instead. With the screen on it polls the lock screen for up to 8 s.
 - **`FlipAnimV3.onAction`** compares the screen with what it last handled on every broadcast and catches up on a missed change.
-- **The set-back is kept in prefs** (`flip_clock_setup/prepared`), so a process killed while the screen is off still flips on unlock. Without a set-back there's no unlock flip (it would jump back and forth).
-- **`UnlockWatchJob`** still keeps the process awake while the screen is on, so `SCREEN_OFF` arrives. It does no work after the unlock, and the ticker's once-a-second pulse no longer runs, so this costs memory rather than CPU.
+- **The set-back is kept in prefs** (`flip_clock_setup/prepared`, with the digits in `prepared_h`/`prepared_m`), so a process killed while the screen is off still flips on unlock. Without a set-back there's no unlock flip (it would jump back and forth).
+- **The unlock flip starts from the set-back digits** the launcher still shows, not from "now minus 1 h 2 min": after a fingerprint unlock or a while on the lock screen those differ, and the cards used to jump before flipping. The clock log shows `UNLOCK_FLIP from 8:26 via 28 to 9:29`.
+- **Only when needed:** nothing watches the unlock unless the unlock weather animation is on, or the unlock flip is on and a clock widget is on the home screen.
+- **`UnlockWatchJob`** still keeps the process awake while the screen is on, so `SCREEN_OFF` arrives. It does no work after the unlock, and the ticker's once-a-second pulse no longer runs, so this costs memory rather than CPU. A running job holds a wakelock; if `SCREEN_OFF` were lost the phone would stay awake until the run ends (up to 8 min), so the job also checks the screen every 10 s and ends itself (`WATCH no SCREEN_OFF` in the clock log).
 
 ### Weather changes, alerts, forecast (v1.2.8)
 
 - **`build_weather_change.py`** wraps the 4x2 icon (`sun`) and temperature in a FrameLayout with a hidden overlay copy (ViewFlipper + ImageView/TextView, spare appcompat ids `action_bar_spinner`/`action_menu_divider` and `action_menu_presenter`/`split_action_bar`, anim `abc_slide_out_top` = fade out with a slight zoom). `WeatherChange` (called from `WeatherBar.apply` via `BreezyWeather.setupHint`) shows the overlay with the old value when the stored weather changes, and hides it again after the fade, the same pattern as the flip flaps.
 - **Alerts:** the Breezy query asks for alerts; the row keeps those in force (`alerts`: headline, severity, end).
 - **Forecast panel:** built from the stored rows' `;`-separated hourly and daily lists, with HTC's colour icons (`LocalStateResources.getConditionResourceId_Color`) and condition names (`WeatherText.getConditionText`).
+- **Notification card (`NotificationCard`):** the weather notification is a picture card: HTC Weather's backdrop for the condition (the landscape set, copied to `assets/notif_bg` by `build_notification.py`, not kept in the repo) behind the icon, temperature, condition or alert and place, and, expanded, the alert line and the next five days (`WidgetForecast.fill`). The resources are compiled, so the card takes over two layouts nothing uses (`specific_weather_clock_4x2_digital_tab_hour`/`_tab_minute`) and existing ids. The backdrop is cut to a band around its subject, scaled to 720 px and dimmed by its brightness. Android puts its own header around custom views, so it's a card inside the notification, not edge to edge. If anything is missing it falls back to the plain notification.
+- **5-day forecast row (`WidgetForecast`):** `build_weather_change.py` also adds a hidden row below `background_panel` in the 4x2 layout (background `common_panel_dark`, HTC's unused ids `forecast_row`/`fc_day_N`/`fc_icon_N`/`fc_temp_N`). The views are top-aligned in a full-height root, so the row only shows when the widget is a row taller and is cut off otherwise. Filled on every redraw from the stored days, starting at tomorrow by each day's date (`fstEpochDate`, new in the row), so it's right after midnight before the next sync. It shows the main place.
+- **Weather notification** is only re-posted when what it shows changes, not after every sync.
+- **Rain warning (`RainWarning`):** after each sync, the first hour within the next two with a wet condition code (12–26, 29, 39–44) or a ≥ 60% chance, unless it's already wet. One notification per spell (`breezy/rain_wet_at`: no new one until 3 h without rain expected), channel "Rain warnings", gone an hour after the rain was due. Debug builds: `am broadcast -a com.htc.widget.weatherclock.RAIN_TEST -n com.htc.widget.weatherclock/.openmeteo.FlipClockTicker` fakes rain in the next hour.
+- **Weather animation timing:** the scene's clock and its sound start on the first frame drawn (the sound is prepared while the scene loads), and the textures are uploaded to the GPU while loading (`prepareToDraw`), so the start is no longer skipped when the window takes a moment to show.
 - **Flip click:** `assets/flip_click.wav`, synthesised by `flipdown/make_click.py` (no HTC asset). `wav` is in `apktool.yml`'s `doNotCompress`, so `SoundPool` can open it.
 
 ### Startup ANR fix
@@ -186,7 +193,9 @@ To build it yourself:
    ```sh
    python3 source/flipdown/build_weather_change.py HTC-WeatherClock-10.10.1059527-android36-v1.2.6-breezy.apk apktool-project-breezy
    python3 source/flipdown/make_click.py apktool-project-breezy
+   python3 source/flipdown/build_notification.py HTC-WeatherClock-10.10.1059527-android36-v1.2.6-breezy.apk com.htc.Weather_9.00.914774.apk apktool-project-breezy
    ```
+   `build_notification.py` needs the HTC Weather app's APK (9.00) for its backdrops.
    The manifest is generated by the build script (`tools/breezy_manifest.py` from the 1.2.4 project's manifest).
 5. **Build:**
    ```sh
