@@ -134,6 +134,13 @@ public class WeatherSettingsActivity extends Activity {
             OpenMeteoBridge.requestSync(this, true);
         }));
 
+        header("Clock design");
+        mList.addView(radios(new String[]{"Modern HTC (thin digits)", "Classic HTC (Desire)"},
+                FlipStyle.classic(this) ? 1 : 0, i -> {
+            FlipStyle.setClassic(this, i == 1);
+            OpenMeteoBridge.requestSync(this, true);  // redraws the widgets in the new layout
+        }));
+
         header("After unlocking (as on HTC Sense)");
         boolean flip = FlipStyle.unlockFlip(this), anim = UnlockWeather.enabled(this);
         mList.addView(radios(new String[]{"Nothing", "Flip the clock", "Play the weather animation",
@@ -190,7 +197,7 @@ public class WeatherSettingsActivity extends Activity {
         mList.addView(toggle("Animation sound (when the ringer is on)", BreezyWeather.animationSound(this),
                 on -> BreezyWeather.setAnimationSound(this, on)));
         TextView hint = text("Tapping the temperature always opens Breezy Weather. Tapping the clock opens the "
-                + "alarm clock.", 13, false);
+                + "alarm clock, and the date the calendar.", 13, false);
         hint.setAlpha(0.7f);
         hint.setPadding(0, dp(6), 0, 0);
         mList.addView(hint);
@@ -198,7 +205,9 @@ public class WeatherSettingsActivity extends Activity {
         header("Updates");
         TextView upd = text("The widget follows Breezy. Set how often Breezy refreshes in Breezy → Settings → "
                 + "Background updates. For instant updates, turn on Weather Clock Widget in Breezy → Settings → "
-                + "External modules → Data sharing → Send Breezy Weather Location Update Notifier data.", 14, false);
+                + "External modules → Data sharing → Send Breezy Weather Location Update Notifier data. If Breezy says \"No "
+                + "compatible packages found\", first allow the widget to read Breezy (Set up above) and open Breezy "
+                + "from here once, then look again.", 14, false);
         mList.addView(upd);
 
         header("Troubleshooting");

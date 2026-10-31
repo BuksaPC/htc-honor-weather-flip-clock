@@ -49,6 +49,20 @@ final class FlipAnimV3 {
     private static final long PREPARED_HOLD_MS = 5000;
     /** At most this long for the panel to go off after the screen stopped being interactive. */
     private static final long PANEL_WAIT_MS = 1000;
+    /**
+     * After unlocking, the flip waits this long, and with usage access until the home screen is in front (at
+     * most INTRO_WAIT_MS): pushed while the launcher is still coming back (Samsung's unlock animation), it is
+     * merged in without animating, or plays during the transition and stutters.
+     */
+    private static final long INTRO_DELAY_MS = 400;
+    private static final long INTRO_WAIT_MS = 1500;
+    /**
+     * Screen-ons noticed only by the minute tick (the phone holds the widget's broadcasts and alarms back), in a
+     * row, before the cards are no longer set back while locked: else the set-back shows after unlocking until
+     * that tick, up to a minute. On time again this many times in a row and they are set back again.
+     */
+    private static final int LATE_LIMIT = 3;
+    private static final int PROMPT_LIMIT = 5;
     private static final int VISIBLE = 0;
     private static final int INVISIBLE = 4;
     private static final int GONE = 8;
@@ -91,6 +105,8 @@ final class FlipAnimV3 {
     /** What onAction last handled: the screen coming on (SCREEN_ON) or going off; null before either. */
     private static volatile Boolean sScreenOn;
     private static volatile boolean sWeatherDone;
+    /** The last screen-on was noticed as it happened (SCREEN_ON, ScreenWatch, USER_PRESENT), not by a tick. */
+    private static volatile boolean sScreenOnPrompt;
     private static boolean sLoaded;
     private static Handler sHandler;
 
@@ -132,7 +148,7 @@ final class FlipAnimV3 {
         try {
             Resources res = app.getResources();
             String pkg = app.getPackageName();
-            RemoteViews rv = views(res, pkg);
+            RemoteViews rv = views(app);
             base(rv, res, pkg, newH, newM);
             flipped |= card(rv, res, pkg, MINUTE, oldM >= 0 && oldM != newM, minute(oldM), minute(newM));
             flipped |= card(rv, res, pkg, HOUR, oldH >= 0 && oldH != newH, hour(oldH), hour(newH));
@@ -171,7 +187,8 @@ final class FlipAnimV3 {
                 }
             } else if ("android.intent.action.SCREEN_ON".equals(action) || (screen && !Boolean.TRUE.equals(sScreenOn))) {
                 if (screen) {
-                    screenOn(app, "android.intent.action.SCREEN_ON".equals(action) || ScreenWatch.ACTION.equals(action));
+                    screenOn(app, "android.intent.action.SCREEN_ON".equals(action) || ScreenWatch.ACTION.equals(action)
+                            || "android.intent.action.USER_PRESENT".equals(action));
                 }
             } else if (watching(app) && !locked(app) && screen) {
                 UnlockWatchJob.start(app);  // e.g. after an update or a restart: watch for the screen going off
@@ -208,8 +225,12 @@ final class FlipAnimV3 {
         sIntroDone = false;
         sWeatherDone = !justNow && !locked(app);
         sScreenOnAt = SystemClock.elapsedRealtime();
+        sScreenOnPrompt = justNow;
+        if (FlipStyle.useV3(app) && FlipStyle.unlockFlip(app) && watching(app)) {
+            noticed(app, justNow);
+        }
         if (watching(app)) {
-            if (FlipStyle.useV3(app) && FlipStyle.unlockFlip(app) && locked(app)) {
+            if (FlipStyle.useV3(app) && FlipStyle.unlockFlip(app) && locked(app) && setBack(app)) {
                 prepare(app);  // again, for the current minute
             }
             UnlockWatchJob.start(app);
@@ -274,7 +295,7 @@ final class FlipAnimV3 {
         sScreenOn = false;
         sIntroDone = false;
         WeatherAnim.stopOverlay();
-        if (FlipStyle.useV3(app) && FlipStyle.unlockFlip(app)) {
+        if (FlipStyle.useV3(app) && FlipStyle.unlockFlip(app) && setBack(app)) {
             prepare(app);
             ClockLog.tick(app, "PREPARE");
         }
@@ -294,11 +315,61 @@ final class FlipAnimV3 {
             return;
         }
         if (beginIntro(app, sawLock)) {
-            intro(app, null);
+            sPlaying = true;  // the ticker keeps off until the flip is pushed
+            introWhenHome(app, SystemClock.elapsedRealtime());
         } else if (sPrepared && !sPlaying) {
             restore(app);
         }
         weather(app, sawLock);
+    }
+
+    /** The unlock flip once the launcher shows again (see INTRO_DELAY_MS). */
+    private static void introWhenHome(final Context app, final long since) {
+        if (sHandler == null) {
+            sHandler = new Handler(Looper.getMainLooper());
+        }
+        sHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (!isScreenOn(app) || locked(app)) {
+                    sPlaying = false;  // locked again first: the next unlock flips (the cards stay set back)
+                    sIntroDone = false;
+                    return;
+                }
+                if (SystemClock.elapsedRealtime() - since < INTRO_WAIT_MS && UnlockWeather.hasUsageAccess(app)
+                        && !UnlockWeather.homeInFront(app)) {
+                    sHandler.postDelayed(this, 100);
+                    return;
+                }
+                intro(app, null);
+            }
+        }, INTRO_DELAY_MS);
+    }
+
+    /**
+     * Whether the cards are set back while locked (Sense's way), or the unlock flip starts from the right time.
+     * Off on phones that notice the screen coming on only with the minute tick (see LATE_LIMIT).
+     */
+    private static boolean setBack(Context app) {
+        return !app.getSharedPreferences("flip_clock_setup", 0).getBoolean("setback_off", false);
+    }
+
+    private static void noticed(Context app, boolean prompt) {
+        android.content.SharedPreferences p = app.getSharedPreferences("flip_clock_setup", 0);
+        boolean off = p.getBoolean("setback_off", false);
+        int late = prompt ? 0 : p.getInt("late_unlocks", 0) + 1;
+        int onTime = prompt ? p.getInt("prompt_unlocks", 0) + 1 : 0;
+        if (!off && late >= LATE_LIMIT) {
+            off = true;
+            ClockLog.tick(app, "SETBACK off: screen-on noticed late " + late + " times");
+            if (sPrepared && !locked(app)) {
+                restore(app);
+            }
+        } else if (off && onTime >= PROMPT_LIMIT) {
+            off = false;
+            ClockLog.tick(app, "SETBACK on again");
+        }
+        p.edit().putInt("late_unlocks", late).putInt("prompt_unlocks", onTime).putBoolean("setback_off", off).apply();
     }
 
     private static synchronized void weather(Context app, boolean sawLock) {
@@ -372,7 +443,7 @@ final class FlipAnimV3 {
     private static void paint(Context app, int h, int m) {
         Resources res = app.getResources();
         String pkg = app.getPackageName();
-        RemoteViews rv = views(res, pkg);
+        RemoteViews rv = views(app);
         base(rv, res, pkg, h, m);
         for (String[][] card : new String[][][]{MINUTE, HOUR}) {
             hide(rv, res, pkg, card, SETS);
@@ -387,6 +458,7 @@ final class FlipAnimV3 {
         return "screen " + (sScreenOn == null ? "not seen yet" : sScreenOn ? "on" : "off")
                 + (ago >= 0 ? " (on " + ago + " s ago)" : "")
                 + ", clock set back: " + (sPrepared ? "yes" : "no")
+                + (sApp != null && !setBack(sApp) ? " (off: this phone tells the widget late)" : "")
                 + ", unlock flip this time: " + (sIntroDone ? "played" : "not yet");
     }
 
@@ -398,12 +470,15 @@ final class FlipAnimV3 {
     /**
      * True once per screen-on when the cards are set back, the keyguard is gone and nothing is playing, right
      * after unlocking ({@code sawLock}) or within a minute of the screen coming on. Without the set-back (missed
-     * screen-off) there's no flip: it would jump from the right time back and forth.
+     * screen-off) there's no flip: it would jump from the right time back and forth. Except when the set-back
+     * is turned off for this phone (setBack()): then right after unlocking, from the right time.
      */
     private static synchronized boolean beginIntro(Context app, boolean sawLock) {
         load(app);
-        if (sIntroDone || sPlaying || !sPrepared || !FlipStyle.useV3(app) || !FlipStyle.unlockFlip(app)
-                || locked(app) || (!sawLock && SystemClock.elapsedRealtime() - sScreenOnAt > 60000)) {
+        long since = SystemClock.elapsedRealtime() - sScreenOnAt;
+        // Not set back (setBack() off): only right after unlocking, as it flips from the right time.
+        boolean fresh = sPrepared ? sawLock || since <= 60000 : !setBack(app) && (sawLock || (sScreenOnPrompt && since < 3000));
+        if (sIntroDone || sPlaying || !fresh || !FlipStyle.useV3(app) || !FlipStyle.unlockFlip(app) || locked(app)) {
             return false;
         }
         sIntroDone = true;
@@ -447,7 +522,7 @@ final class FlipAnimV3 {
             }
             Resources res = app.getResources();
             String pkg = app.getPackageName();
-            RemoteViews rv = views(res, pkg);
+            RemoteViews rv = views(app);
             base(rv, res, pkg, h, m);
             flipped = card(rv, res, pkg, HOUR, true, hour(h0), hour(h));
             flipped |= twice(rv, res, pkg, MINUTE, minute(m0), minute(mid), minute(m));
@@ -550,8 +625,8 @@ final class FlipAnimV3 {
                 rv.setViewVisibility(id, GONE);
                 continue;
             }
-            int img = drawable(res, pkg, "clock_weather_" + digits[s] + suffix);
-            rv.setImageViewResource(id, img != 0 ? img : drawable(res, pkg, "clock_weather_" + digits[s]));
+            int img = drawable(res, pkg, FlipStyle.digitName(digits[s], suffix));
+            rv.setImageViewResource(id, img != 0 ? img : drawable(res, pkg, FlipStyle.digitName(digits[s], "")));
             rv.setViewVisibility(id, VISIBLE);
         }
     }
@@ -572,7 +647,7 @@ final class FlipAnimV3 {
         try {
             Resources res = app.getResources();
             String pkg = app.getPackageName();
-            RemoteViews rv = views(res, pkg);
+            RemoteViews rv = views(app);
             for (String[][] card : new String[][][]{MINUTE, HOUR}) {
                 hide(rv, res, pkg, card, SETS);
                 rv.setViewVisibility(id(res, pkg, name(card, "B")), GONE);
@@ -597,7 +672,7 @@ final class FlipAnimV3 {
             if (digits[i] < 0) {
                 continue;
             }
-            int img = drawable(res, pkg, "clock_weather_" + digits[i]);
+            int img = drawable(res, pkg, FlipStyle.digitName(digits[i], ""));
             if (a != 0) {
                 rv.setImageViewResource(a, img);
             }
@@ -637,8 +712,9 @@ final class FlipAnimV3 {
         return context.getApplicationContext() != null ? context.getApplicationContext() : context;
     }
 
-    private static RemoteViews views(Resources res, String pkg) {
-        return new RemoteViews(pkg, res.getIdentifier("specific_weather_clock_4x2", "layout", pkg));
+    /** Also caches the design for base() and fill(). */
+    private static RemoteViews views(Context app) {
+        return new RemoteViews(app.getPackageName(), FlipStyle.layout4x2(app));
     }
 
     private static void push(Context app, RemoteViews rv) {

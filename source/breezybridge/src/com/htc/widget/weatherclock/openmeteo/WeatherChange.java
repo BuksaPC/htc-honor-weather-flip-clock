@@ -126,7 +126,7 @@ final class WeatherChange {
         try {
             String pkg = app.getPackageName();
             android.content.res.Resources res = app.getResources();
-            RemoteViews rv = new RemoteViews(pkg, res.getIdentifier("specific_weather_clock_4x2", "layout", pkg));
+            RemoteViews rv = new RemoteViews(pkg, FlipStyle.layout4x2(app));
             for (String id : new String[]{ICON_FLIP, TEMP_FLIP}) {
                 int v = res.getIdentifier(id, "id", pkg);
                 if (v != 0) rv.setViewVisibility(v, 8);

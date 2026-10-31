@@ -35,6 +35,7 @@ To change how often the weather refreshes, set **Breezy → Settings → Backgro
 These replace HTC's "Select a city" for the weather widgets. The dual, travel and digital clocks keep HTC's picker, because there it chooses a time zone.
 
 - **Weather source:** Breezy status (city, temperature, high/low, last update), plus buttons to open Breezy and Breezy's settings. Shows **Set up** while Breezy is missing, not allowed, or has no location.
+- **Clock design:** HTC's later look, or the classic flip clock of the HTC Hero and Desire.
 - **Temperature:** °C or °F, and **Show the feels-like temperature**. When it's on, the widget shows a small "Feels like" label before the number.
 - **After unlocking:** nothing, the flip, the weather animation over the home screen (`UnlockWeather`: an overlay window, played only when usage access shows the launcher in front), or both. **Flip sound** with the unlock flip.
 - **Weather on the widget:** **Animate weather changes** (`WeatherChange`), **Show weather alerts in place of the date**, **Weather in notifications** (`WeatherNotification`).
@@ -170,6 +171,18 @@ Android 14+ holds `SCREEN_ON`/`SCREEN_OFF` back from a frozen (cached) app, and 
 - **Weather animation timing:** the scene's clock and its sound start on the first frame drawn (the sound is prepared while the scene loads), and the textures are uploaded to the GPU while loading (`prepareToDraw`), so the start is no longer skipped when the window takes a moment to show.
 - **Flip click:** `assets/flip_click.wav`, synthesised by `flipdown/make_click.py` (no HTC asset). `wav` is in `apktool.yml`'s `doNotCompress`, so `SoundPool` can open it.
 
+### Unlock watch (unreleased)
+
+- **`ScreenWatch` after a background wake** (screen still off) sets its alarm 1 s ahead for the first three in a row, then 5 s and 20 s: a notification's wake is usually over within a second, so the alarm stays pending and is delivered the moment the screen comes on. Before, it was 5 s ahead from the first, and a screen-on in that window was noticed up to 5 s late.
+- **The lock screen is watched for as long as it shows** with the screen on: each 8 s run ends by setting the alarm again, so a slow PIN, pattern or face unlock no longer waits for the minute tick when `UnlockWatchJob` hasn't started.
+
+### Clock design (unreleased)
+
+- **Setting "Clock design"** (`flip_clock_setup/design_classic`, `FlipStyle.classic`): HTC's later look, or the flip clock of the HTC Hero and Desire (Sense 1.x): its digits, its white cards with the hinge line and the stacked page edges above and below them, its dark glass panel behind the cards and the weather, a larger weather icon lower down, and the 5-day row as on HTC's weather of that time (icon, high/low with the low in grey, day name; "Tomorrow" first) on the same glass.
+- **`build_classic.py`** takes the images from `HtcClockWidget.apk` of the Desire HD's first ROM (Android 2.2, 1.32.405.6, on archive.org as `htc-chronologia-6`): `flip_N`, `weather_clock_tab_up`/`_down`, `flip_clock_divider` and `clock_add_weather_base`. The digits are scaled so their hinge matches the current digits'. They go into drawable entries the APK declares but has no files for (`weather_clock_default_N_light`, three `clock_a_half_*`), so `resources.arsc` stays as it is. The design's card layouts go to the four 4x2 `_for_5x5` layouts, which only HTC's launcher used, and the card face to `specific_weather_clock_4x2_forecast`. They're the `build_layouts.py`/`build_weather_change.py` layouts with the Desire's faces and panel; the digits are scaled up a little (`scaleX`/`scaleY`, nothing in the card clips them), and the flaps show the whole digit clipped at the hinge by a half-height frame, as there aren't enough spare drawables for separate halves.
+- **Smali:** `WeatherClock4x2ViewSingle.getLayout` returns `FlipStyle.layout4x2(getContext())` (it picked the `_for_5x5` layout when HTC's launcher reported more than four columns); `FlipDigits.apply` and `setAmPm` first map the digit or AM/PM image through `FlipStyle.digit` (the Desire's `flip_am`/`flip_pm` in 12-hour time).
+- Debug builds: `am broadcast -a com.htc.widget.weatherclock.RENDER_TEST -n com.htc.widget.weatherclock/.openmeteo.FlipClockTicker` draws the current design to `files/render.png`.
+
 ### Startup ANR fix
 
 The widget's provider used to start the flip clock directly in its `onCreate`. The clock code queries the provider itself. Because the provider wasn't published yet, Android created another instance, whose `onCreate` did the same thing, about 110 levels deep. Every cold start took 20–40 s of CPU and ended in a "failed to complete startup" ANR. That showed up as a blank widget after restarts, dead taps and laggy settings.
@@ -194,8 +207,9 @@ To build it yourself:
    python3 source/flipdown/build_weather_change.py HTC-WeatherClock-10.10.1059527-android36-v1.2.6-breezy.apk apktool-project-breezy
    python3 source/flipdown/make_click.py apktool-project-breezy
    python3 source/flipdown/build_notification.py HTC-WeatherClock-10.10.1059527-android36-v1.2.6-breezy.apk com.htc.Weather_9.00.914774.apk apktool-project-breezy
+   python3 source/flipdown/build_classic.py HTC-WeatherClock-10.10.1059527-android36-v1.2.6-breezy.apk HtcClockWidget.apk apktool-project-breezy
    ```
-   `build_notification.py` needs the HTC Weather app's APK (9.00) for its backdrops.
+   `build_notification.py` needs the HTC Weather app's APK (9.00) for its backdrops, and `build_classic.py` the Desire HD's `HtcClockWidget.apk` (from `system.img` of its 1.32.405.6 ROM).
    The manifest is generated by the build script (`tools/breezy_manifest.py` from the 1.2.4 project's manifest).
 5. **Build:**
    ```sh

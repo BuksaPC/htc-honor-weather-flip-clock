@@ -7,7 +7,7 @@ The classic **HTC Sense flip clock and weather widget** for modern Android, with
 
 | | |
 |---|---|
-| **Latest release** | **v1.2.8-breezy**: `HTC-WeatherClock-10.10.1059527-android36-v1.2.8-breezy.apk` ([Releases](https://github.com/BuksaPC/htc-honor-weather-flip-clock/releases)) |
+| **Latest release** | **v1.2.9-breezy**: `HTC-WeatherClock-10.10.1059527-android36-v1.2.9-breezy.apk` ([Releases](https://github.com/BuksaPC/htc-honor-weather-flip-clock/releases)) |
 | **Needs** | Android 7.0+ and Breezy Weather ([F-Droid](https://f-droid.org/packages/org.breezyweather/) or [GitHub](https://github.com/breezy-weather/breezy-weather/releases)) |
 | **Root / adb** | Not needed |
 | **Internet permission** | None. Breezy fetches the weather; the widget only reads what Breezy shares on the phone |
@@ -49,6 +49,7 @@ Updating from the **Honor edition** (v1.2.3-honor)? Install over it. The `adb ap
 | Setting | |
 |---|---|
 | Weather source | Breezy status (city, temperature, high/low, last update), plus **Open Breezy** and **Breezy settings** |
+| Clock design | **Modern HTC** (thin digits, default) or **Classic HTC (Desire)**: the Hero/Desire flip clock with its bold digits, cards, glass panel and AM/PM (12-hour time) |
 | Temperature | °C or °F |
 | Show the feels-like temperature | Shows Breezy's feels-like value, labelled **"Feels like"** on the widget |
 | After unlocking | Nothing, flip the clock (default), play the weather animation over the home screen, or both. The animation needs **Display over other apps** and **Usage access**, so it only plays on the home screen, never over an app |
@@ -71,7 +72,15 @@ Updating from the **Honor edition** (v1.2.3-honor)? Install over it. The `adb ap
 - **HTC's flip clock, as on Sense 3:** the flap folds down at the hinge and the new half drops into place, with HTC's own motion and timing (0.67 s per flip). On unlock the hour flips once and the minute twice, as on Sense. The home screen plays the animation itself, so it stays smooth.
 - **Unchanged:** the date line, calendar events and themes.
 
-## What's new in v1.2.8-breezy
+## What's new in v1.2.9-breezy
+
+See [release-notes-v1.2.9-breezy.md](release-notes-v1.2.9-breezy.md). In short:
+
+- **Classic HTC (Desire) design:** the Hero/Desire flip clock from HTC's own images: bold digits, white cards with stacked pages, the glass panel, AM/PM, and a forecast row in the style of that time.
+- **Unlock flip fixes:** no more clock a minute behind after unlocking, no lag or skipped flip on Samsung, and slow unlocks (PIN, face) are no longer missed.
+- **Tap the date** to open the calendar.
+
+## v1.2.8-breezy
 
 See [release-notes-v1.2.8-breezy.md](release-notes-v1.2.8-breezy.md). In short:
 
@@ -145,6 +154,7 @@ Full technical write-up: **[BREEZY.md](BREEZY.md)** (Breezy edition) and **[ANIM
 
 ## Previous releases
 
+- **v1.2.8-breezy:** forecast, notification card, rain warning, unlock weather. Superseded by v1.2.9-breezy (classic Desire design, unlock fixes).
 - **v1.2.7-breezy:** clock lag fix, HTC flip-down and unlock flip. Superseded by v1.2.8-breezy (forecast, notification card, rain warning, unlock weather).
 - **v1.2.6-breezy:** the widget icon around sunrise and sunset. Superseded by v1.2.7-breezy (clock lag, HTC flip animation).
 - **v1.2.5-breezy:** day/night and animation fixes. Superseded by v1.2.6-breezy (icon around sunrise and sunset).

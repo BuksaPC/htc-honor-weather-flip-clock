@@ -65,6 +65,8 @@ final class ClockLog {
                 what += " " + inflateTest(ctx) + " / apply: " + applyTest(ctx);
             } else if ("CASCADE_TEST".equals(what)) {
                 cascadeTest(ctx);
+            } else if ("RENDER_TEST".equals(what)) {
+                what += " " + renderTest(ctx);
             } else if ("RAIN_TEST".equals(what)) {
                 RainWarning.test(ctx);
             }
@@ -91,7 +93,7 @@ final class ClockLog {
     /** Inflates the 4x2 layout in-process (adb: am broadcast -a ...INFLATE_TEST -n .../.openmeteo.FlipClockTicker). */
     private static String inflateTest(Context ctx) {
         try {
-            int id = ctx.getResources().getIdentifier("specific_weather_clock_4x2", "layout", ctx.getPackageName());
+            int id = FlipStyle.layout4x2(ctx);
             android.view.LayoutInflater.from(ctx).inflate(id, new android.widget.FrameLayout(ctx), false);
             return "ok";
         } catch (Throwable th) {
@@ -111,7 +113,7 @@ final class ClockLog {
             String pkg = ctx.getPackageName();
             android.content.res.Resources res = ctx.getResources();
             android.widget.RemoteViews rv = new android.widget.RemoteViews(pkg,
-                    res.getIdentifier("specific_weather_clock_4x2", "layout", pkg));
+                    FlipStyle.layout4x2(ctx));
             StringBuilder missing = new StringBuilder();
             for (String id : new String[]{"action_bar_spinner", "action_menu_presenter", "minute_flap_top", "hour_flap_top", "secondary4"}) {
                 int v = res.getIdentifier(id, "id", pkg);
@@ -130,6 +132,50 @@ final class ClockLog {
                 if (v.findViewById(res.getIdentifier(id, "id", pkg)) == null) missing.append("view:").append(id).append(' ');
             }
             return missing.length() == 0 ? "ok" : "missing " + missing;
+        } catch (Throwable th) {
+            String s = android.util.Log.getStackTraceString(th);
+            return s.length() > 2000 ? s.substring(0, 2000) : s;
+        }
+    }
+
+    /**
+     * Draws the 4x2 layout of the current design to files/render.png at 10:08, with the minute card's folding
+     * flap showing the old top half "07" (adb: ...RENDER_TEST): checks the design's layouts without a launcher.
+     */
+    private static String renderTest(Context ctx) {
+        try {
+            String pkg = ctx.getPackageName();
+            android.content.res.Resources res = ctx.getResources();
+            FlipStyle.classic(ctx);
+            android.widget.RemoteViews rv = new android.widget.RemoteViews(pkg, FlipStyle.layout4x2(ctx));
+            String[] slots = {"digital_hour_tens", "digital_hour_units", "digital_minute_tens", "digital_minute_units"};
+            int[] digits = {1, 0, 0, 8};
+            for (int i = 0; i < slots.length; i++) {
+                int img = res.getIdentifier(FlipStyle.digitName(digits[i], ""), "drawable", pkg);
+                rv.setImageViewResource(res.getIdentifier(slots[i], "id", pkg), img);
+                rv.setImageViewResource(res.getIdentifier(slots[i] + "_b", "id", pkg), img);
+                rv.setViewVisibility(res.getIdentifier(slots[i] + "_flip", "id", pkg), 0);
+            }
+            rv.setViewVisibility(res.getIdentifier("digital_hour_center_flip", "id", pkg), 4);
+            rv.setViewVisibility(res.getIdentifier("minute_flap_top", "id", pkg), 0);
+            rv.setImageViewResource(res.getIdentifier("minute_flap_tens_top", "id", pkg),
+                    res.getIdentifier(FlipStyle.digitName(0, "_top"), "drawable", pkg));
+            rv.setImageViewResource(res.getIdentifier("minute_flap_units_top", "id", pkg),
+                    res.getIdentifier(FlipStyle.digitName(7, "_top"), "drawable", pkg));
+            android.widget.FrameLayout parent = new android.widget.FrameLayout(ctx);
+            android.view.View v = rv.apply(ctx, parent);
+            int w = Math.round(380 * res.getDisplayMetrics().density), h = Math.round(220 * res.getDisplayMetrics().density);
+            v.measure(android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(h, android.view.View.MeasureSpec.EXACTLY));
+            v.layout(0, 0, w, h);
+            android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+            b.eraseColor(0xff3a4a5a);
+            v.draw(new android.graphics.Canvas(b));
+            java.io.File f = new java.io.File(ctx.getFilesDir(), "render.png");
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) {
+                b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out);
+            }
+            return "ok " + f;
         } catch (Throwable th) {
             String s = android.util.Log.getStackTraceString(th);
             return s.length() > 2000 ? s.substring(0, 2000) : s;

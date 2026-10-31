@@ -200,6 +200,7 @@ public final class BreezyWeather {
             if (s == State.READY) {
                 WeatherChange.apply(ctx, rv);
                 alertLine(ctx, rv);
+                dateClick(ctx, rv);
                 WidgetForecast.apply(ctx, rv);
                 return;
             }
@@ -219,6 +220,19 @@ public final class BreezyWeather {
         } catch (Throwable t) {
             Log.w(TAG, "setup hint failed", t);
         }
+    }
+
+    /** Tapping the date opens the calendar on today, or Breezy while the line shows an alert. */
+    private static void dateClick(Context ctx, android.widget.RemoteViews rv) {
+        int date = ctx.getResources().getIdentifier("week_date", "id", ctx.getPackageName());
+        if (date == 0) return;
+        boolean alert = alertsOnWidget(ctx) && topAlert(ctx) != null;
+        Intent i = alert ? ctx.getPackageManager().getLaunchIntentForPackage(PKG)
+                : new Intent().setClassName(ctx, "com.htc.widget.weatherclock.openmeteo.CalendarTapActivity");
+        if (i == null) return;
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        rv.setOnClickPendingIntent(date, android.app.PendingIntent.getActivity(ctx, alert ? 0x8ef1 : 0x8ef0, i,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE));
     }
 
     /** A weather alert in force replaces the date line ("⚠ Wind warning"), as long as it lasts. */

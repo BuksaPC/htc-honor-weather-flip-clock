@@ -17,15 +17,19 @@ import android.util.Log;
  *
  * At screen-off (FlipAnimV3.screenOff) a non-wakeup alarm is set for a second later. It never wakes the phone:
  * Android delivers it the next time the phone is awake, at the latest as the screen comes on, and alarms reach
- * a frozen app. If the phone was only awake in the background (screen still off), it is set again. When the
- * screen is on, FlipAnimV3 handles the screen-on, and this receiver watches the lock screen for a few seconds
- * (while UnlockWatchJob may still be waiting to start) to catch the unlock.
+ * a frozen app. If the phone was only awake in the background (screen still off), it is set again, a second
+ * later at first: a background wake (a notification) is usually over by then, and the alarm left pending is
+ * delivered the moment the screen comes on. Only when the phone stays awake does it back off. When the screen is
+ * on, FlipAnimV3 handles the screen-on, and this receiver watches the lock screen (UnlockWatchJob may start late
+ * or not at all), in runs of a few seconds chained by the same alarm for as long as the lock screen shows: a PIN,
+ * a pattern or face unlock can take any time.
  */
 public class ScreenWatch extends BroadcastReceiver {
     static final String ACTION = "com.htc.widget.weatherclock.action.SCREEN_WATCH";
     private static final String TAG = "ScreenWatch";
     private static final long FIRST_MS = 1000;
-    /** Again after a background wake: later, as Android holds non-wakeup alarms back while the screen is off. */
+    /** Again after the first background wakes in a row, then later (AGAIN_MS) while the phone stays awake. */
+    private static final int QUICK_STREAK = 3;
     private static final long AGAIN_MS = 5000;
     /**
      * Again once the phone has stayed awake with the screen off for a minute (music, navigation, a download):
@@ -63,6 +67,11 @@ public class ScreenWatch extends BroadcastReceiver {
         }
     }
 
+    /** How long after a background wake (the screen still off) the alarm is set for again. */
+    private static long wait(int streak) {
+        return streak < QUICK_STREAK ? FIRST_MS : streak < AWAKE_STREAK ? AGAIN_MS : AWAKE_AGAIN_MS;
+    }
+
     @Override
     public void onReceive(Context context, Intent intent) {
         final Context app = context.getApplicationContext() != null ? context.getApplicationContext() : context;
@@ -75,10 +84,9 @@ public class ScreenWatch extends BroadcastReceiver {
         long now = SystemClock.elapsedRealtime();
         if (!FlipAnimV3.isScreenOn(app)) {
             // On time again (within twice the wait): the phone stayed awake since the last one.
-            long wait = sStreak >= AWAKE_STREAK ? AWAKE_AGAIN_MS : AGAIN_MS;
-            sStreak = sLastOff > 0 && now - sLastOff < 2 * wait ? sStreak + 1 : 0;
+            sStreak = sLastOff > 0 && now - sLastOff < 2 * wait(sStreak) ? sStreak + 1 : 0;
             sLastOff = now;
-            arm(app, sStreak >= AWAKE_STREAK ? AWAKE_AGAIN_MS : AGAIN_MS);
+            arm(app, wait(sStreak));
             return;
         }
         sStreak = 0;
@@ -101,6 +109,7 @@ public class ScreenWatch extends BroadcastReceiver {
                 } else if (SystemClock.elapsedRealtime() < until) {
                     h.postDelayed(this, POLL_MS);
                 } else {
+                    arm(app, POLL_MS);  // still on the lock screen: the next run carries on (the screen is on)
                     result.finish();
                 }
             }

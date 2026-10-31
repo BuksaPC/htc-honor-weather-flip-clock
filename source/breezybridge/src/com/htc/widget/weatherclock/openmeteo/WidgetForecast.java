@@ -68,6 +68,7 @@ final class WidgetForecast {
         if (first < 0 || first >= codes.length) return false;
         Locale locale = WeatherLocale.userLocale(ctx);
         SimpleDateFormat day = new SimpleDateFormat("EEE", locale != null ? locale : Locale.getDefault());
+        boolean classic = FlipStyle.classic(ctx);
         for (int i = 0; i < DAYS; i++) {
             int d = first + i;
             int dayId = res.getIdentifier("fc_day_" + i, "id", pkg), iconId = res.getIdentifier("fc_icon_" + i, "id", pkg),
@@ -81,9 +82,18 @@ final class WidgetForecast {
             long at = epochs.length > d ? num(epochs[d], 0) * 1000L : 0;
             String name = at > 0 ? day.format(new Date(at + 12 * 3600_000L)) : "";  // noon: the place's day
             int icon = LocalStateResources.getConditionResourceId_Color(num(codes[d], 1));
+            String hi = at(his, d) + "°", lo = at(los, d) + "°";
+            if (classic) {
+                // As on HTC's weather of the Desire's time: "Tomorrow" first, the low in grey.
+                if (i == 0) name = "Tomorrow";
+                android.text.SpannableString t = new android.text.SpannableString(hi + "/" + lo);
+                t.setSpan(new android.text.style.ForegroundColorSpan(0xffa0a4a8), hi.length(), t.length(), 0);
+                rv.setTextViewText(tempId, t);
+            } else {
+                rv.setTextViewText(tempId, hi + "/" + lo);
+            }
             rv.setTextViewText(dayId, name);
             rv.setImageViewResource(iconId, icon);
-            rv.setTextViewText(tempId, at(his, d) + "°/" + at(los, d) + "°");
         }
         return true;
     }

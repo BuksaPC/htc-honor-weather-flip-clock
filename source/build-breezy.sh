@@ -1,5 +1,5 @@
 #!/bin/bash
-# Rebuilds HTC-WeatherClock-v1.2.8-breezy.apk from apktool-project-breezy + breezybridge.
+# Rebuilds HTC-WeatherClock-v1.2.9-breezy.apk from apktool-project-breezy + breezybridge.
 # breezybridge/stubs are compile-time stand-ins for smali classes the Java code calls; they are not dexed.
 # ./build-breezy.sh --debug: the adb test hooks stay reachable (FlipClockTicker exported), output *-debug.apk.
 set -e
@@ -15,5 +15,5 @@ $BT/d8 --lib $JAR --min-api 24 --output out/dex $(find out/classes -name '*.clas
 java -jar tools/apktool.jar b apktool-project-breezy -o out/unsigned.apk
 cp out/dex/classes.dex out/classes3.dex && (cd out && zip -q -0 unsigned.apk classes3.dex)
 java -jar tools/signer.jar -a out/unsigned.apk -o out/signed
-cp out/signed/unsigned-aligned-debugSigned.apk ../HTC-WeatherClock-v1.2.8-breezy$SUFFIX.apk
-echo "built ../HTC-WeatherClock-v1.2.8-breezy$SUFFIX.apk"
+cp out/signed/unsigned-aligned-debugSigned.apk ../HTC-WeatherClock-v1.2.9-breezy$SUFFIX.apk
+echo "built ../HTC-WeatherClock-v1.2.9-breezy$SUFFIX.apk"
