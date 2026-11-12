@@ -413,6 +413,6 @@ final class IconFx {
     private static void push(Context app, RemoteViews rv) {
         AppWidgetManager mgr = AppWidgetManager.getInstance(app);
         int[] ids = mgr.getAppWidgetIds(new ComponentName(app.getPackageName(), FlipAnimV3.PROVIDER_4X2));
-        if (ids != null) for (int i : ids) mgr.partiallyUpdateAppWidget(i, rv);
+        if (ids != null) for (int i : ids) WidgetLog.partial(mgr, i, rv);
     }
 }

@@ -200,7 +200,7 @@ public final class WeatherAnim {
             android.widget.RemoteViews rv = new android.widget.RemoteViews(app.getPackageName(), FlipStyle.layout4x2(app));
             rv.setViewVisibility(sun, show ? View.VISIBLE : View.INVISIBLE);
             if (show) IconFx.apply(app, rv); else IconFx.hideFx(app, rv);  // the icon's own effects with it
-            for (int id : ids) mgr.partiallyUpdateAppWidget(id, rv);
+            for (int id : ids) WidgetLog.partial(mgr, id, rv);
         } catch (Throwable th) {
             android.util.Log.w(BreezyWeather.TAG, "widget icon", th);
         }

@@ -35,7 +35,7 @@ import java.util.Locale;
  */
 public class DiagnosticsActivity extends Activity {
     private LinearLayout mList;
-    private TextView mChecks, mEvents;
+    private TextView mChecks, mEvents, mWidgets;
     private int mAccent;
 
     /** Why the widget may be held back in the background, or null: also shown in the widget settings. */
@@ -120,6 +120,22 @@ public class DiagnosticsActivity extends Activity {
             }
         }));
 
+        header("Widgets");
+        TextView whatW = text(13);
+        whatW.setText("Each placed widget, the size the home screen gives it, and the updates the widget sent it. "
+                + "If a widget stays empty, a ✗ here shows why.");
+        whatW.setAlpha(0.7f);
+        mList.addView(whatW);
+        mWidgets = text(13);
+        mWidgets.setTypeface(Typeface.MONOSPACE);
+        mWidgets.setPadding(0, dp(8), 0, 0);
+        mList.addView(mWidgets);
+        mList.addView(button("Redraw widgets", v -> {
+            sendBroadcast(new Intent("com.htc.sync.provider.weather.trigger.weatherwidget").setPackage(getPackageName()));
+            Toast.makeText(this, "Redrawing…", Toast.LENGTH_SHORT).show();
+            mWidgets.postDelayed(this::refresh, 2500);
+        }));
+
         header("Recent clock events");
         TextView how = text(13);
         how.setText("To check the unlock flip: lock the phone, wait until the screen is off, unlock it, then come "
@@ -185,6 +201,7 @@ public class DiagnosticsActivity extends Activity {
 
     private void refresh() {
         mChecks.setText(checks());
+        mWidgets.setText(WidgetLog.report(this));
         List<String> ev = ClockLog.recent();
         StringBuilder b = new StringBuilder();
         for (int i = ev.size() - 1; i >= 0; i--) b.append(ev.get(i)).append('\n');
@@ -192,12 +209,20 @@ public class DiagnosticsActivity extends Activity {
     }
 
     private void copy() {
-        String report = "Weather Clock unlock & battery check\n" + checks() + "\n\nRecent events (newest first):\n"
-                + mEvents.getText();
+        String report = "Weather Clock unlock & battery check\n" + versionLine() + checks() + "\n\nWidgets:\n"
+                + WidgetLog.report(this) + "\n\nRecent events (newest first):\n" + mEvents.getText();
         ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
         if (cm != null) {
             cm.setPrimaryClip(ClipData.newPlainText("Weather Clock check", report));
             Toast.makeText(this, "Report copied", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private String versionLine() {
+        try {
+            return "Version " + getPackageManager().getPackageInfo(getPackageName(), 0).versionName + "\n";
+        } catch (Exception e) {
+            return "";
         }
     }
 

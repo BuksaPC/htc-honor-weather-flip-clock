@@ -833,7 +833,7 @@ final class FlipAnimV3 {
         int[] ids = mgr.getAppWidgetIds(new ComponentName(app.getPackageName(), PROVIDER_4X2));
         if (ids != null) {
             for (int id : ids) {
-                mgr.partiallyUpdateAppWidget(id, rv);
+                WidgetLog.partial(mgr, id, rv);
             }
         }
     }

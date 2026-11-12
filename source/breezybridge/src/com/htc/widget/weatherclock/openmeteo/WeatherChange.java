@@ -133,7 +133,7 @@ final class WeatherChange {
             }
             AppWidgetManager mgr = AppWidgetManager.getInstance(app);
             int[] ids = mgr.getAppWidgetIds(new ComponentName(pkg, PROVIDER_4X2));
-            if (ids != null) for (int id : ids) mgr.partiallyUpdateAppWidget(id, rv);
+            if (ids != null) for (int id : ids) WidgetLog.partial(mgr, id, rv);
         } catch (Throwable th) {
             Log.w(TAG, "settle failed", th);
         }

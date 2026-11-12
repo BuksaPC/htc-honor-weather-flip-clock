@@ -257,3 +257,8 @@ To build it yourself:
 `Android/data/com.htc.widget.weatherclock/files/clock_ticks.txt` logs every flip-clock event: each minute tick, screen on and off, unlock, and the flip. Each line shows what the clock shows and how far behind it is. It's capped at 256 KB. Since v1.2.8 it's only written with **Debug log** on in the widget settings (Troubleshooting).
 
 `Android/data/com.htc.widget.weatherclock/files/breezy_status.txt` logs each sync ("synced 1 rows from Breezy: 8°C, 15°/7° code 35"), startup time, weather taps and errors. Since v1.2.8 it leaves place names out. It's there because some phones (Honor, for example) hide app logs.
+
+### Widget update log (diagnostics build, v1.2.12-diag)
+
+- Every widget update goes through **`WidgetLog.full/partial`**: the 10 smali call sites (`FlipAnimV1/V2`, `FlipClockTicker`, `RemoteViewData`, `WidgetConfigure$ConfigureTask`) had `invoke-virtual AppWidgetManager->updateAppWidget/partiallyUpdateAppWidget` changed to `invoke-static WidgetLog->full/partial(AppWidgetManager, int, RemoteViews)`, with the same registers; the Java ones call it directly. It records per widget the last full and partial update, the full update's parcelled size and any exception, then rethrows it.
+- **Unlock & battery check → Widgets** lists each placed widget with its size options and host category, plus a **Redraw widgets** button. Copy report includes it and the version. Android ignores partial updates to a widget that never got a full one, so a widget that stays empty with "full update: never" or an error points at the full update.
