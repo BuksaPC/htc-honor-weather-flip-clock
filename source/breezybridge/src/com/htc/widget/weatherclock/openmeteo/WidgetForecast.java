@@ -94,6 +94,7 @@ final class WidgetForecast {
             }
             rv.setTextViewText(dayId, name);
             rv.setImageViewResource(iconId, icon);
+            WidgetLook.forecastIcon(ctx, rv, iconId);
         }
         return true;
     }

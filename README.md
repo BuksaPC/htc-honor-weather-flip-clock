@@ -7,7 +7,7 @@ The classic **HTC Sense flip clock and weather widget** for modern Android, with
 
 | | |
 |---|---|
-| **Latest release** | **v1.2.9-breezy**: `HTC-WeatherClock-10.10.1059527-android36-v1.2.9-breezy.apk` ([Releases](https://github.com/BuksaPC/htc-honor-weather-flip-clock/releases)) |
+| **Latest release** | **v1.2.10-breezy**: `HTC-WeatherClock-10.10.1059527-android36-v1.2.10-breezy.apk` ([Releases](https://github.com/BuksaPC/htc-honor-weather-flip-clock/releases)) |
 | **Needs** | Android 7.0+ and Breezy Weather ([F-Droid](https://f-droid.org/packages/org.breezyweather/) or [GitHub](https://github.com/breezy-weather/breezy-weather/releases)) |
 | **Root / adb** | Not needed |
 | **Internet permission** | None. Breezy fetches the weather; the widget only reads what Breezy shares on the phone |
@@ -72,7 +72,15 @@ Updating from the **Honor edition** (v1.2.3-honor)? Install over it. The `adb ap
 - **HTC's flip clock, as on Sense 3:** the flap folds down at the hinge and the new half drops into place, with HTC's own motion and timing (0.67 s per flip). On unlock the hour flips once and the minute twice, as on Sense. The home screen plays the animation itself, so it stays smooth.
 - **Unchanged:** the date line, calendar events and themes.
 
-## What's new in v1.2.9-breezy
+## What's new in v1.2.10-breezy
+
+See [release-notes-v1.2.10-breezy.md](release-notes-v1.2.10-breezy.md). In short:
+
+- **Animated weather icon, as on HTC HD2:** after unlocking, HD2 style (grows in, rain or snow falls, then settles) or HD2's original icon animation; or always animated.
+- **New settings:** weather and forecast icon size, tap the clock to flip it (as on Sense), HTC Weather's full-screen video as the weather animation, its size, and hiding the icon while it plays.
+- **Fixes:** widget missing on Samsung One UI (Galaxy S26), AM/PM blinking, forecast placement, a sync loop that could stall the clock.
+
+## v1.2.9-breezy
 
 See [release-notes-v1.2.9-breezy.md](release-notes-v1.2.9-breezy.md). In short:
 
@@ -154,6 +162,7 @@ Full technical write-up: **[BREEZY.md](BREEZY.md)** (Breezy edition) and **[ANIM
 
 ## Previous releases
 
+- **v1.2.9-breezy:** classic Desire design, unlock flip fixes. Superseded by v1.2.10-breezy (animated HD2 weather icon, new settings, Samsung fix).
 - **v1.2.8-breezy:** forecast, notification card, rain warning, unlock weather. Superseded by v1.2.9-breezy (classic Desire design, unlock fixes).
 - **v1.2.7-breezy:** clock lag fix, HTC flip-down and unlock flip. Superseded by v1.2.8-breezy (forecast, notification card, rain warning, unlock weather).
 - **v1.2.6-breezy:** the widget icon around sunrise and sunset. Superseded by v1.2.7-breezy (clock lag, HTC flip animation).

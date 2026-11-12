@@ -5,14 +5,18 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
+import android.graphics.SurfaceTexture;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Build;
 import android.view.Display;
 import android.view.MotionEvent;
+import android.view.Surface;
+import android.view.TextureView;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -20,8 +24,9 @@ import android.view.WindowManager;
 import java.util.Arrays;
 
 /**
- * Tapping the weather plays the HTC Sense 3 weather animation over the home screen; a tap during it opens
- * Breezy Weather. Runs inside CalendarTapActivity, which is already translucent and declared.
+ * Tapping the weather plays the HTC Sense 3 weather animation over the home screen, or HTC Weather's
+ * full-screen video for the conditions (the "HTC Weather video" style); a tap during it opens Breezy Weather.
+ * Runs inside CalendarTapActivity, which is already translucent and declared.
  */
 public final class WeatherAnim {
     static final String ACTION = "com.htc.widget.weatherclock.WEATHER_ANIM/";
@@ -29,6 +34,7 @@ public final class WeatherAnim {
     private static final String TAP_ACTIVITY = "com.htc.widget.weatherclock.openmeteo.CalendarTapActivity";
     private static final String EXTRA_CODE = "condition";
     private static final float FADE_S = 0.7f;
+    private static final String VIDEO_DIR = "weather_video/";
     /** The widget's weather icon within a Sense 3 scene, as fractions of its size (measured on a 1060 px screen). */
     private static final float SCENE_ICON_X = 0.5f, SCENE_ICON_Y = 0.47f;
 
@@ -92,8 +98,9 @@ public final class WeatherAnim {
         int code = in.getIntExtra(EXTRA_CODE, 1);
         // The widget may have been drawn before sunrise or sunset.
         code = BreezyWeather.isDay(code < 33) ? toDay(code) : toNight(code);
-        final String name = sceneFor(a, code);
-        if (name == null) {
+        final String video = BreezyWeather.animationVideo(a) ? videoFor(a, code) : null;
+        final String name = video != null ? null : sceneFor(a, code);
+        if (video == null && name == null) {
             openWeather(a, in);
             return true;
         }
@@ -103,8 +110,13 @@ public final class WeatherAnim {
         preferFastestRefresh(Build.VERSION.SDK_INT >= 30 ? a.getDisplay() : a.getWindowManager().getDefaultDisplay(), lp);
         w.setAttributes(lp);
         final boolean forecast = BreezyWeather.tapMode(a) == BreezyWeather.TAP_ANIMATION_FORECAST;
-        final Player player = new Player(a, in.getSourceBounds(),
-                BreezyWeather.animationSound(a) ? soundFor(code) : null, tapped -> {
+        String sound = BreezyWeather.animationSound(a) ? soundFor(code) : null;
+        rememberIcon(Build.VERSION.SDK_INT >= 30 ? a.getDisplay() : a.getWindowManager().getDefaultDisplay(),
+                a, in.getSourceBounds());
+        final boolean anchored = video == null && WidgetLook.hideIcon(a);
+        if (anchored) widgetIcon(a, false);  // the animation grows out of the widget's icon, as on Sense
+        End onEnd = tapped -> {
+            if (anchored) widgetIcon(a, true);
             if (forecast) {
                 ForecastPanel.show(a, () -> openWeather(a, in));
             } else if (tapped) {
@@ -113,10 +125,85 @@ public final class WeatherAnim {
                 a.finish();
                 a.overridePendingTransition(0, 0);
             }
-        });
+        };
+        if (video != null) {
+            a.setContentView(new VideoPlayer(a, video, sound, onEnd, () -> openWeather(a, in)));
+            return true;
+        }
+        final Player player = new Player(a, in.getSourceBounds(), sound, onEnd);
         a.setContentView(player);
         load(a, name, player, () -> openWeather(a, in));
         return true;
+    }
+
+    /**
+     * Where the widget's weather icon is on screen, from the last tap on it (the launcher passes its bounds),
+     * kept with the screen's size: the animation after unlocking grows out of it too. Null until the first tap.
+     */
+    private static void rememberIcon(Display d, Context ctx, Rect r) {
+        if (r == null || r.isEmpty() || d == null) return;
+        android.graphics.Point size = new android.graphics.Point();
+        d.getRealSize(size);
+        ctx.getSharedPreferences("breezy", 0).edit().putString("icon_bounds", size.x + "x" + size.y
+                + ":" + r.flattenToString()).apply();
+    }
+
+    private static Rect iconBounds(Context ctx, Display d) {
+        try {
+            String v = ctx.getSharedPreferences("breezy", 0).getString("icon_bounds", null);
+            if (v == null) return null;
+            android.graphics.Point size = new android.graphics.Point();
+            d.getRealSize(size);
+            String[] p = v.split(":", 2);
+            String[] wh = p[0].split("x");
+            int w = Integer.parseInt(wh[0]), h = Integer.parseInt(wh[1]);
+            // The same screen (a foldable's inner and cover screens differ), held the same way.
+            boolean same = w == size.x && h == size.y;
+            return same ? Rect.unflattenFromString(p[1]) : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static final Runnable RESTORE_ICON = () -> {
+        if (WeatherAnim.sIconContext != null) widgetIcon(WeatherAnim.sIconContext, true);
+    };
+    private static Context sIconContext;
+    private static boolean sIconHidden;
+
+    /**
+     * Hides the 4x2 widgets' weather icon while the tap animation plays over it (else the scene's big sun or moon
+     * is drawn on top of the small one) and shows it again; shown again after 20 s whatever happens.
+     */
+    /** The widget's icon is hidden while the tap animation plays over it. */
+    static boolean iconHiddenForTap() {
+        return sIconHidden;
+    }
+
+    static void widgetIcon(Context ctx, boolean show) {
+        try {
+            Context app = ctx.getApplicationContext();
+            android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+            h.removeCallbacks(RESTORE_ICON);
+            if (show == !sIconHidden) return;
+            sIconHidden = !show;
+            if (!show) {
+                sIconContext = app;
+                h.postDelayed(RESTORE_ICON, 20_000);
+            }
+            int sun = app.getResources().getIdentifier("sun", "id", app.getPackageName());
+            if (sun == 0) return;
+            android.appwidget.AppWidgetManager mgr = android.appwidget.AppWidgetManager.getInstance(app);
+            int[] ids = mgr.getAppWidgetIds(new android.content.ComponentName(app.getPackageName(),
+                    FlipAnimV3.PROVIDER_4X2));
+            if (ids == null) return;
+            android.widget.RemoteViews rv = new android.widget.RemoteViews(app.getPackageName(), FlipStyle.layout4x2(app));
+            rv.setViewVisibility(sun, show ? View.VISIBLE : View.INVISIBLE);
+            if (show) IconFx.apply(app, rv); else IconFx.hideFx(app, rv);  // the icon's own effects with it
+            for (int id : ids) mgr.partiallyUpdateAppWidget(id, rv);
+        } catch (Throwable th) {
+            android.util.Log.w(BreezyWeather.TAG, "widget icon", th);
+        }
     }
 
     private static void load(Context ctx, String name, Player player, Runnable failed) {
@@ -135,7 +222,12 @@ public final class WeatherAnim {
     // ---- After unlocking (UnlockWeather) ----
 
     private static volatile int sShown = -1;
-    private static Player sOverlay;
+    private static View sOverlay;
+
+    /** The condition the widget's icon shows, or -1 before the first redraw. */
+    static int shownCondition(Context ctx) {
+        return sShown >= 0 ? sShown : ctx.getSharedPreferences("breezy", 0).getInt("shown_condition", -1);
+    }
 
     /** The condition the widget shows (its icon), for the animation after unlocking. */
     private static void rememberShown(Context ctx, int code) {
@@ -163,8 +255,9 @@ public final class WeatherAnim {
             }
             BreezyWeather.loadSunPlace(app);
             code = BreezyWeather.isDay(code < 33) ? toDay(code) : toNight(code);
-            String name = sceneFor(app, code);
-            if (name == null) return;
+            String video = BreezyWeather.animationVideo(app) ? videoFor(app, code) : null;
+            String name = video != null ? null : sceneFor(app, code);
+            if (video == null && name == null) return;
             Display d = ((android.hardware.display.DisplayManager) app.getSystemService(Context.DISPLAY_SERVICE))
                     .getDisplay(Display.DEFAULT_DISPLAY);
             final Context ctx = Build.VERSION.SDK_INT >= 30
@@ -182,12 +275,25 @@ public final class WeatherAnim {
                 lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
             }
             preferFastestRefresh(d, lp);
-            final Player[] self = new Player[1];
-            self[0] = new Player(ctx, null, BreezyWeather.animationSound(app) ? soundFor(code) : null,
-                    tapped -> removeOverlay(wm, self[0]));
-            sOverlay = self[0];
-            wm.addView(self[0], lp);
-            load(ctx, name, self[0], () -> removeOverlay(wm, self[0]));
+            String sound = BreezyWeather.animationSound(app) ? soundFor(code) : null;
+            final View[] self = new View[1];
+            if (video != null) {
+                self[0] = new VideoPlayer(ctx, video, sound, tapped -> removeOverlay(wm, self[0]),
+                        () -> removeOverlay(wm, self[0]));
+                sOverlay = self[0];
+                wm.addView(self[0], lp);
+                return;
+            }
+            final boolean hide = WidgetLook.hideIcon(app);
+            if (hide) widgetIcon(app, false);
+            Player player = new Player(ctx, iconBounds(app, d), sound, tapped -> {
+                if (hide) widgetIcon(app, true);
+                removeOverlay(wm, self[0]);
+            });
+            self[0] = player;
+            sOverlay = player;
+            wm.addView(player, lp);
+            load(ctx, name, player, () -> removeOverlay(wm, player));
         } catch (Throwable th) {
             android.util.Log.w(BreezyWeather.TAG, "unlock animation failed", th);
             sOverlay = null;
@@ -196,11 +302,11 @@ public final class WeatherAnim {
 
     /** The screen went off: no animation left over for the next unlock. */
     static void stopOverlay() {
-        Player p = sOverlay;
-        if (p != null) p.post(() -> p.end(false));
+        View p = sOverlay;
+        if (p != null) p.post(() -> ((Anim) p).end(false));
     }
 
-    private static void removeOverlay(WindowManager wm, Player p) {
+    private static void removeOverlay(WindowManager wm, View p) {
         try {
             wm.removeView(p);
         } catch (Throwable ignored) {
@@ -209,6 +315,7 @@ public final class WeatherAnim {
     }
 
     private static void openWeather(Activity a, Intent in) {
+        widgetIcon(a, true);
         if (!BreezyWeather.open(a)) {
             setup(a);
             return;
@@ -280,6 +387,17 @@ public final class WeatherAnim {
         return null;
     }
 
+    /** HTC Weather's video for the code (NotificationCard names the same scenes), or null when it's missing. */
+    private static String videoFor(Context ctx, int code) {
+        String name = NotificationCard.backdrop(code, code < 33 || code > 44) + ".mp4";
+        try {
+            String[] have = ctx.getAssets().list(VIDEO_DIR.substring(0, VIDEO_DIR.length() - 1));
+            return have != null && Arrays.asList(have).contains(name) ? VIDEO_DIR + name : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static String soundFor(int code) {
         switch (code) {
             case 1: case 2: case 3: case 4: case 5: case 33: case 34: case 35: case 36: case 37:
@@ -322,7 +440,27 @@ public final class WeatherAnim {
 
     private interface End { void ended(boolean tapped); }
 
-    private static final class Player extends View {
+    private interface Anim { void end(boolean tapped); }
+
+    /** The condition's sound, prepared (blocks: call it off the main thread), or null when the ringer is off. */
+    private static MediaPlayer openSound(Context context, String sound) {
+        AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null || am.getRingerMode() != AudioManager.RINGER_MODE_NORMAL) return null;
+        MediaPlayer mp = new MediaPlayer();
+        try (AssetFileDescriptor fd = context.getAssets().openFd(AnimScene.DIR + "sound/sound_" + sound + ".flac")) {
+            mp.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
+            mp.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
+            mp.prepare();
+            return mp;
+        } catch (Exception e) {
+            mp.release();
+            return null;
+        }
+    }
+
+    private static final class Player extends View implements Anim {
         private final Context context;
         private final Rect tap;
         private final End onEnd;
@@ -352,6 +490,13 @@ public final class WeatherAnim {
          */
         private void place(AnimScene s) {
             int w = getWidth(), h = getHeight();
+            if (WidgetLook.animFullScreen(context)) {
+                // Fills the screen (as HD2's weather): cropped at the sides or the bottom, centred across.
+                scale = Math.max((float) w / s.width, (float) h / s.height);
+                ox = (w - s.width * scale) / 2f;
+                oy = 0f;
+                return;
+            }
             scale = Math.min(w, h * 0.62f) / s.width;
             ox = (w - s.width * scale) / 2f;
             oy = 0f;
@@ -378,19 +523,8 @@ public final class WeatherAnim {
         /** On the loading thread: the sound ready to start with the first frame. */
         void prepareSound() {
             if (sound == null) return;
-            AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-            if (am == null || am.getRingerMode() != AudioManager.RINGER_MODE_NORMAL) return;
-            MediaPlayer mp = new MediaPlayer();
-            try (AssetFileDescriptor fd = context.getAssets().openFd(AnimScene.DIR + "sound/sound_" + sound + ".flac")) {
-                mp.setAudioAttributes(new AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
-                mp.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
-                mp.prepare();
-            } catch (Exception e) {
-                mp.release();
-                return;
-            }
+            MediaPlayer mp = openSound(context, sound);
+            if (mp == null) return;
             post(() -> {
                 if (done) mp.release();
                 else media = mp;
@@ -443,7 +577,8 @@ public final class WeatherAnim {
             return true;
         }
 
-        void end(boolean tapped) {
+        @Override
+        public void end(boolean tapped) {
             if (done) return;
             done = true;
             releaseSound();
@@ -455,6 +590,170 @@ public final class WeatherAnim {
             super.onDetachedFromWindow();
             done = true;
             releaseSound();
+        }
+    }
+
+    /**
+     * HTC Weather's video for the conditions, full screen, as HD2's launcher plays it: muted and cropped to fill
+     * the screen (the upper part kept, where the sun and the moon are), faded in on its first frame so there's
+     * no black flash, faded out after SHOW_MS. The recordings loop seamlessly, so a long show just loops.
+     */
+    private static final class VideoPlayer extends TextureView implements TextureView.SurfaceTextureListener, Anim {
+        private static final long FADE_IN_MS = 400, SHOW_MS = 5000, FADE_OUT_MS = 700;
+        private final String asset;
+        private final End onEnd;
+        private final Runnable failed;
+        private MediaPlayer video, media;
+        private Surface surface;
+        private boolean shown, done;
+        private final Runnable fadeOutTask = this::fadeOut;
+
+        VideoPlayer(Context c, String asset, String sound, End onEnd, Runnable failed) {
+            super(c);
+            this.asset = asset;
+            this.onEnd = onEnd;
+            this.failed = failed;
+            setOpaque(false);
+            setAlpha(0f);
+            setSurfaceTextureListener(this);
+            if (sound != null) {
+                new Thread(() -> {
+                    MediaPlayer mp = openSound(c, sound);
+                    if (mp != null) post(() -> {
+                        if (done) mp.release();
+                        else media = mp;
+                    });
+                }, "weather-sound").start();
+            }
+        }
+
+        @Override
+        public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h) {
+            if (done) return;
+            surface = new Surface(st);
+            MediaPlayer mp = new MediaPlayer();
+            video = mp;
+            try (AssetFileDescriptor fd = getContext().getAssets().openFd(asset)) {
+                mp.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
+                mp.setSurface(surface);
+                mp.setVolume(0f, 0f);
+                mp.setLooping(true);
+                mp.setOnVideoSizeChangedListener((p, vw, vh) -> crop(vw, vh));
+                mp.setOnPreparedListener(p -> {
+                    if (done) return;
+                    crop(p.getVideoWidth(), p.getVideoHeight());
+                    p.start();
+                });
+                mp.setOnErrorListener((p, what, extra) -> {
+                    android.util.Log.w(BreezyWeather.TAG, "video " + asset + " failed: " + what + "/" + extra);
+                    fail();
+                    return true;
+                });
+                mp.prepareAsync();
+            } catch (Exception e) {
+                android.util.Log.w(BreezyWeather.TAG, "video " + asset + " failed", e);
+                fail();
+            }
+        }
+
+        @Override
+        public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) {
+            if (video != null) {
+                try {
+                    crop(video.getVideoWidth(), video.getVideoHeight());
+                } catch (Exception ignored) {
+                }
+            }
+        }
+
+        @Override
+        public boolean onSurfaceTextureDestroyed(SurfaceTexture st) {
+            done = true;
+            release();
+            return true;
+        }
+
+        /** The first frame is on screen: fade in, with the sound. */
+        @Override
+        public void onSurfaceTextureUpdated(SurfaceTexture st) {
+            if (shown || done) return;
+            shown = true;
+            if (media != null) {
+                try {
+                    media.start();
+                } catch (Exception e) {
+                    media.release();
+                    media = null;
+                }
+            }
+            animate().alpha(1f).setDuration(FADE_IN_MS).withEndAction(() -> postDelayed(fadeOutTask, SHOW_MS));
+        }
+
+        private void fadeOut() {
+            if (done) return;
+            animate().alpha(0f).setDuration(FADE_OUT_MS).setUpdateListener(a -> {
+                if (media != null) {
+                    try {
+                        media.setVolume(getAlpha(), getAlpha());
+                    } catch (Exception ignored) {
+                    }
+                }
+            }).withEndAction(() -> end(false));
+        }
+
+        /** Fills the view, centred across, the upper part kept (HD2 anchors at 35% of the height). */
+        private void crop(int vw, int vh) {
+            float w = getWidth(), h = getHeight();
+            if (w <= 0 || h <= 0 || vw <= 0 || vh <= 0) return;
+            float s = Math.max(w / vw, h / vh);
+            Matrix m = new Matrix();
+            m.setScale(vw * s / w, vh * s / h, w / 2f, h * 0.35f);
+            setTransform(m);
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent e) {
+            if (e.getAction() == MotionEvent.ACTION_UP) end(true);
+            return true;
+        }
+
+        @Override
+        public void end(boolean tapped) {
+            if (done) return;
+            done = true;
+            animate().cancel();
+            release();
+            onEnd.ended(tapped);
+        }
+
+        private void fail() {
+            if (done) return;
+            done = true;
+            release();
+            failed.run();
+        }
+
+        private void release() {
+            removeCallbacks(fadeOutTask);
+            if (video != null) {
+                video.release();
+                video = null;
+            }
+            if (media != null) {
+                media.release();
+                media = null;
+            }
+            if (surface != null) {
+                surface.release();
+                surface = null;
+            }
+        }
+
+        @Override
+        protected void onDetachedFromWindow() {
+            super.onDetachedFromWindow();
+            done = true;
+            release();
         }
     }
 }

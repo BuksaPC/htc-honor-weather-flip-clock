@@ -36,7 +36,7 @@ import java.util.Calendar;
  */
 final class FlipAnimV3 {
     private static final String TAG = "FlipAnimV3";
-    private static final String PROVIDER_4X2 = "com.htc.widget.weatherclock.WeatherClock4x2";
+    static final String PROVIDER_4X2 = "com.htc.widget.weatherclock.WeatherClock4x2";
     /** A flip (HTC: 10 frames at 29.97 fps, speed 0.5), plus slack for the launcher to apply the update. */
     private static final long DURATION_MS = 667 + 150;
     /**
@@ -45,6 +45,8 @@ final class FlipAnimV3 {
      * the merged views. Hiding the flaps earlier would merge that in too, and the flip would never show.
      */
     private static final long UNLOCK_HOLD_MS = 3000;
+    /** The weather icon's handover (IconFx), added to the update that puts the flaps away (settle). */
+    private static volatile IconFx.Handover sIconHandover;
     /** How long after screen-on a set-back still waits for the unlock flip before the ticker may repaint. */
     private static final long PREPARED_HOLD_MS = 5000;
     /** At most this long for the panel to go off after the screen stopped being interactive. */
@@ -93,7 +95,7 @@ final class FlipAnimV3 {
             "digital_hour_tens", "digital_hour_units", "digital_hour_center", "digital_minute_tens", "digital_minute_units"};
 
     private static volatile boolean sPlaying;
-    private static volatile boolean sIntroDone;
+    private static volatile boolean sIntroDone, sIconIntroDone;
     private static volatile boolean sPrepared;
     private static volatile Context sApp;
     private static volatile long sPreparedAt;
@@ -294,11 +296,13 @@ final class FlipAnimV3 {
         Context app = app(context);
         sScreenOn = false;
         sIntroDone = false;
+        sIconIntroDone = false;
         WeatherAnim.stopOverlay();
         if (FlipStyle.useV3(app) && FlipStyle.unlockFlip(app) && setBack(app)) {
             prepare(app);
             ClockLog.tick(app, "PREPARE");
         }
+        IconFx.prepare(app);
         if (watching(app)) {
             ScreenWatch.arm(app);
         }
@@ -314,13 +318,44 @@ final class FlipAnimV3 {
         if (locked(app)) {
             return;
         }
-        if (beginIntro(app, sawLock)) {
+        boolean flip = beginIntro(app, sawLock);
+        if (flip) {
             sPlaying = true;  // the ticker keeps off until the flip is pushed
-            introWhenHome(app, SystemClock.elapsedRealtime());
+            introWhenHome(app, SystemClock.elapsedRealtime());  // the icon's grow-in goes with it
         } else if (sPrepared && !sPlaying) {
             restore(app);
         }
+        if (!flip && !sIconIntroDone && IconFx.enabled(app)) {
+            sIconIntroDone = true;
+            if (sawLock || SystemClock.elapsedRealtime() - sScreenOnAt < 60000) {
+                iconIntroWhenHome(app, SystemClock.elapsedRealtime());
+            } else {
+                IconFx.restore(app);
+            }
+        }
         weather(app, sawLock);
+    }
+
+    /** The weather icon's grow-in (IconFx.intro) once the launcher shows again, as the unlock flip. */
+    private static void iconIntroWhenHome(final Context app, final long since) {
+        if (sHandler == null) {
+            sHandler = new Handler(Looper.getMainLooper());
+        }
+        sHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (!isScreenOn(app) || locked(app)) {
+                    sIconIntroDone = false;
+                    return;
+                }
+                if (SystemClock.elapsedRealtime() - since < INTRO_WAIT_MS && UnlockWeather.hasUsageAccess(app)
+                        && !UnlockWeather.homeInFront(app)) {
+                    sHandler.postDelayed(this, 100);
+                    return;
+                }
+                IconFx.intro(app);
+            }
+        }, INTRO_DELAY_MS);
     }
 
     /** The unlock flip once the launcher shows again (see INTRO_DELAY_MS). */
@@ -435,6 +470,7 @@ final class FlipAnimV3 {
     /** The cards set back but no unlock flip came (turned off, or too late): just show the right time. */
     private static void restore(Context app) {
         setPrepared(app, false);
+        IconFx.restore(app);
         boolean is24 = DateFormat.is24HourFormat(app);
         Calendar c = Calendar.getInstance();
         paint(app, displayHour(c, is24), c.get(Calendar.MINUTE));
@@ -463,6 +499,34 @@ final class FlipAnimV3 {
     }
 
     /** adb test hook (ClockLog CASCADE_TEST): the unlock flip now. */
+    /**
+     * Tapping the clock with "Tapping the clock: flip it" (ClockTap): both cards flip once onto the time they
+     * already show, as the Sense clock did when touched.
+     */
+    static void flipNow(Context context) {
+        Context app = app(context);
+        if (sPlaying || !FlipStyle.useV3(app)) return;
+        boolean flipped = false;
+        try {
+            boolean is24 = DateFormat.is24HourFormat(app);
+            Calendar c = Calendar.getInstance();
+            int h = displayHour(c, is24), m = c.get(Calendar.MINUTE);
+            Resources res = app.getResources();
+            String pkg = app.getPackageName();
+            RemoteViews rv = views(app);
+            base(rv, res, pkg, h, m);
+            flipped = card(rv, res, pkg, HOUR, true, hour(h), hour(h));
+            flipped |= card(rv, res, pkg, MINUTE, true, minute(m), minute(m));
+            sPlaying = flipped;
+            markShown(app, h, m);
+            push(app, rv);
+            FlipSound.tap(app);
+        } catch (Throwable th) {
+            Log.w(TAG, "tap flip failed", th);
+        }
+        finish(app, flipped, DURATION_MS + 600, null);
+    }
+
     static void testIntro(Context context) {
         intro(app(context), null);
     }
@@ -507,6 +571,7 @@ final class FlipAnimV3 {
      */
     private static void intro(Context app, Runnable onDone) {
         boolean flipped = false;
+        IconFx.Handover icon = null;
         try {
             boolean is24 = DateFormat.is24HourFormat(app);
             Calendar c = Calendar.getInstance();
@@ -529,12 +594,29 @@ final class FlipAnimV3 {
             sPlaying = flipped;
             setPrepared(app, false);
             markShown(app, h, m);
+            if (!sIconIntroDone) {  // the weather icon's grow-in in the same update (IconFx.begin)
+                sIconIntroDone = true;
+                icon = IconFx.begin(app, rv);
+            }
             push(app, rv);
             ClockLog.tick(app, "UNLOCK_FLIP from " + h0 + ":" + m0 + " via " + mid + " to " + h + ":" + m);
             FlipSound.unlock(app);
         } catch (Throwable th) {
             Log.w(TAG, "unlock flip failed", th);
         }
+        final IconFx.Handover iconHandover = icon;
+        if (iconHandover != null && !flipped) {  // no flaps to put away: the icon's own handover later
+            if (sHandler == null) sHandler = new Handler(Looper.getMainLooper());
+            sHandler.postDelayed(() -> {
+                RemoteViews back = views(app);
+                iconHandover.into(back);
+                push(app, back);
+                iconHandover.after();
+            }, UNLOCK_HOLD_MS);
+        }
+        // The icon takes over in the same update that puts the flaps away (settle): any update after the unlock
+        // update would make the launcher play it again.
+        sIconHandover = flipped ? iconHandover : null;
         finish(app, flipped, UNLOCK_HOLD_MS, onDone);
     }
 
@@ -642,6 +724,16 @@ final class FlipAnimV3 {
         }
     }
 
+    /** Every flap hidden, in an update being built (IconFx: the full redraw that ends the unlock animation). */
+    static void hideFlaps(Context app, RemoteViews rv) {
+        Resources res = app.getResources();
+        String pkg = app.getPackageName();
+        for (String[][] card : new String[][][]{MINUTE, HOUR}) {
+            hide(rv, res, pkg, card, SETS);
+            rv.setViewVisibility(id(res, pkg, name(card, "B")), GONE);
+        }
+    }
+
     /** Hides every flap, so later replays of setDisplayedChild animate nothing visible. */
     private static void settle(Context app) {
         try {
@@ -652,7 +744,18 @@ final class FlipAnimV3 {
                 hide(rv, res, pkg, card, SETS);
                 rv.setViewVisibility(id(res, pkg, name(card, "B")), GONE);
             }
+            IconFx.Handover icon = sIconHandover;
+            sIconHandover = null;
+            if (icon != null && icon.redraws()) {
+                // The icon's handover is a full redraw, which replaces this update and puts the flaps away: a
+                // partial update here as well would make the launcher replay the unlock flip.
+                icon.into(null);
+                icon.after();
+                return;
+            }
+            if (icon != null) icon.into(rv);
             push(app, rv);
+            if (icon != null) icon.after();
         } catch (Throwable th) {
             Log.w(TAG, "settle failed", th);
         }

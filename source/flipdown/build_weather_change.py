@@ -96,17 +96,50 @@ def forecast_row():
         cols.append(["LinearLayout", [("gravity", "center_horizontal"), ("orientation", "vertical"),
                                       ("layout_width", "0dp"), ("layout_height", "wrap_content"), ("layout_weight", "1.0")], [
             ["TextView", [("id", f"@id/fc_day_{i}"), ("textSize", "12sp"), ("textStyle", "bold")] + text, [], 0],
-            ["ImageView", [("id", f"@id/fc_icon_{i}"), ("layout_width", "30dp"), ("layout_height", "30dp"),
+            ["ImageView", [("id", f"@id/fc_icon_{i}"), ("layout_width", "40dp"), ("layout_height", "40dp"),
                            ("layout_marginTop", "1dp"), ("scaleType", "fitCenter")], [], 0],
             ["TextView", [("id", f"@id/fc_temp_{i}"), ("textSize", "12sp"), ("layout_marginTop", "1dp")] + text, [], 0],
         ], 0])
     return ["LinearLayout", [("id", "@id/forecast_row"), ("visibility", "gone"), ("orientation", "horizontal"),
                              ("gravity", "center_vertical"), ("background", "@drawable/common_panel_dark"), ("baselineAligned", "false"),
-                             ("paddingLeft", "6dp"), ("paddingTop", "3dp"), ("paddingRight", "6dp"),
-                             ("paddingBottom", "3dp"), ("layout_width", "match_parent"),
+                             ("paddingLeft", "6dp"), ("paddingTop", "2dp"), ("paddingRight", "6dp"),
+                             ("paddingBottom", "2dp"), ("layout_width", "match_parent"),
                              ("layout_height", "wrap_content"), ("layout_marginTop", "2dp"),
                              ("layout_marginLeft", "@dimen/weatherclock_base_margin_left"),
                              ("layout_below", "@id/background_panel")], cols, 0]
+
+
+def unclip_sun(root):
+    """The icon block's parent lets it draw outside itself: the icon size setting (WidgetLook) grows the block
+    about its centre with negative margins."""
+    # A ViewGroup clips each child to that child's bounds: the block's parent and the root both must not.
+    def unclip(node):
+        node[1] = [kv for kv in node[1] if kv[0] != "clipChildren"] + [("clipChildren", "false")]
+
+    def walk(node, parent):
+        if attr(node, "id") == "@id/sun_block":
+            unclip(parent)
+            unclip(node)  # and the block itself: its frame holds the HD2 clouds that reach past it
+            for k in node[2]:
+                unclip(k)
+            return True
+        return any(walk(k, node) for k in node[2])
+    if not walk(root, None):
+        raise SystemExit("no sun_block")
+    unclip(root)
+
+
+def fill_below(row):
+    """The row in a frame filling the widget below the weather panel, centred in it: on a widget stretched a
+    row taller it sits in the middle of the extra space instead of under the panel with a gap below. At the
+    usual height the frame is 0 high and clips the row away: the row sits in an inner frame of the outer one's
+    size, which the outer one clips to (the root doesn't clip, for the icon size setting)."""
+    outer = ("layout_below", "layout_marginLeft", "layout_marginTop")
+    frame = [(k, v) for k, v in row[1] if k in outer]
+    row[1] = [(k, "wrap_content" if k == "layout_height" else v) for k, v in row[1] if k not in outer] + [
+        ("layout_gravity", "center_vertical")]
+    inner = ["FrameLayout", [("layout_width", "match_parent"), ("layout_height", "match_parent")], [row], 0]
+    return ["FrameLayout", [("layout_width", "match_parent"), ("layout_height", "match_parent")] + frame, [inner], 0]
 
 
 def main():
@@ -128,7 +161,10 @@ def main():
             raise SystemExit(f"{name} already has the overlay: run on the release APK")
         wrap(root, view_id, flip_id, inner_id)
         if name == "specific_weather_clock_4x2":
-            root[2].append(forecast_row())
+            root[2].append(fill_below(forecast_row()))
+            unclip_sun(root)
+            import build_icon_fx
+            build_icon_fx.add_to(root)
         out = ['<?xml version="1.0" encoding="utf-8"?>']
         emit(root, out)
         sources[name] = "\n".join(out) + "\n"
@@ -142,8 +178,10 @@ def main():
     for typ, name in sorted(refs):
         if (typ, name) not in resid:
             raise SystemExit(f"unknown resource @{typ}/{name}")
-        if typ != "anim":
+        if typ != "anim" or name != ANIM:
             stable.append(f"{PKG}:{typ}/{name} = {resid[(typ, name)]}")
+        if typ == "anim" and name != ANIM:  # another anim (the icon's grow-in): only its ID matters here
+            open(f"{work}/res/anim/{name}.xml", "w").write(f'<alpha xmlns:android="{NS}" android:fromAlpha="1" android:toAlpha="1" />\n')
         if typ == "id":
             values.append(f'<item type="id" name="{name}" />')
         elif typ == "dimen":
@@ -159,6 +197,9 @@ def main():
         elif typ == "layout":
             if name not in sources:  # an include of one of ours must not be stubbed over
                 open(f"{work}/res/layout/{name}.xml", "w").write(f'<merge xmlns:android="{NS}" />\n')
+        elif typ == "raw":  # the icon's Sense 3 clips: only their IDs matter here
+            os.makedirs(f"{work}/res/raw", exist_ok=True)
+            open(f"{work}/res/raw/{name}.flac", "wb").write(b"\0")
         elif typ != "anim":
             raise SystemExit(f"unhandled type {typ}")
     open(f"{work}/res/values/stubs.xml", "w").write("<resources>\n" + "\n".join(values) + "\n</resources>\n")

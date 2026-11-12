@@ -6,7 +6,7 @@ It works on any phone with **Android 7.0 or newer**.
 
 | | |
 |---|---|
-| **Output** | `HTC-WeatherClock-v1.2.8-breezy.apk` (version `10.10.1059527-android36-v1.2.8-breezy`) |
+| **Output** | `HTC-WeatherClock-v1.2.10-breezy.apk` (version `10.10.1059527-android36-v1.2.10-breezy`) |
 | **Needs** | Breezy Weather 6.x ([F-Droid](https://f-droid.org/packages/org.breezyweather/) or [GitHub](https://github.com/breezy-weather/breezy-weather/releases)) |
 | **Root / adb** | Not needed |
 | **Network** | The widget has **no internet permission**. Breezy does the fetching |
@@ -38,8 +38,10 @@ These replace HTC's "Select a city" for the weather widgets. The dual, travel an
 - **Clock design:** HTC's later look, or the classic flip clock of the HTC Hero and Desire.
 - **Temperature:** °C or °F, and **Show the feels-like temperature**. When it's on, the widget shows a small "Feels like" label before the number.
 - **After unlocking:** nothing, the flip, the weather animation over the home screen (`UnlockWeather`: an overlay window, played only when usage access shows the launcher in front), or both. **Flip sound** with the unlock flip.
-- **Weather on the widget:** **Animate weather changes** (`WeatherChange`), **Show weather alerts in place of the date**, **Weather in notifications** (`WeatherNotification`).
-- **Tapping the weather:** play the Sense animation, play it then show the forecast panel (`ForecastPanel`), or open Breezy. **Animation sound** on or off (it only plays when the ringer is on).
+- **Weather on the widget:** **Animate weather changes** (`WeatherChange`), **Animated weather icon (as on HTC HD2)** (`IconFx`: off, HD2 style after unlocking, HD2 original, or always), **Weather icon size** and **Forecast icon size** (`WidgetLook`, Android 12+), **Show weather alerts in place of the date**, **Tapping the date opens the calendar**, **Weather in notifications** (`WeatherNotification`).
+- **Tapping the weather:** play the Sense animation, play it then show the forecast panel (`ForecastPanel`), or open Breezy.
+- **Tapping the clock:** open the alarm clock, or flip the clock to the same time, as on Sense (`ClockTap`).
+- **Weather animation:** the Sense 3 scene or HTC Weather's full-screen video; for the Sense 3 scene, **Animation size** (grows out of the icon, or full screen as on HD2) and **Hide the widget's weather icon while the animation plays**. **Animation sound** on or off (it only plays when the ringer is on).
 - **Troubleshooting:** a warning when Android restricts the widget in the background, **Unlock & battery check** (`DiagnosticsActivity`) and **Debug log**.
 - **Updates:** where to set Breezy's refresh rate and how to turn on instant updates.
 
@@ -171,17 +173,46 @@ Android 14+ holds `SCREEN_ON`/`SCREEN_OFF` back from a frozen (cached) app, and 
 - **Weather animation timing:** the scene's clock and its sound start on the first frame drawn (the sound is prepared while the scene loads), and the textures are uploaded to the GPU while loading (`prepareToDraw`), so the start is no longer skipped when the window takes a moment to show.
 - **Flip click:** `assets/flip_click.wav`, synthesised by `flipdown/make_click.py` (no HTC asset). `wav` is in `apktool.yml`'s `doNotCompress`, so `SoundPool` can open it.
 
-### Unlock watch (unreleased)
+### Unlock watch (v1.2.9)
 
 - **`ScreenWatch` after a background wake** (screen still off) sets its alarm 1 s ahead for the first three in a row, then 5 s and 20 s: a notification's wake is usually over within a second, so the alarm stays pending and is delivered the moment the screen comes on. Before, it was 5 s ahead from the first, and a screen-on in that window was noticed up to 5 s late.
 - **The lock screen is watched for as long as it shows** with the screen on: each 8 s run ends by setting the alarm again, so a slow PIN, pattern or face unlock no longer waits for the minute tick when `UnlockWatchJob` hasn't started.
 
-### Clock design (unreleased)
+### Clock design (v1.2.9)
 
 - **Setting "Clock design"** (`flip_clock_setup/design_classic`, `FlipStyle.classic`): HTC's later look, or the flip clock of the HTC Hero and Desire (Sense 1.x): its digits, its white cards with the hinge line and the stacked page edges above and below them, its dark glass panel behind the cards and the weather, a larger weather icon lower down, and the 5-day row as on HTC's weather of that time (icon, high/low with the low in grey, day name; "Tomorrow" first) on the same glass.
 - **`build_classic.py`** takes the images from `HtcClockWidget.apk` of the Desire HD's first ROM (Android 2.2, 1.32.405.6, on archive.org as `htc-chronologia-6`): `flip_N`, `weather_clock_tab_up`/`_down`, `flip_clock_divider` and `clock_add_weather_base`. The digits are scaled so their hinge matches the current digits'. They go into drawable entries the APK declares but has no files for (`weather_clock_default_N_light`, three `clock_a_half_*`), so `resources.arsc` stays as it is. The design's card layouts go to the four 4x2 `_for_5x5` layouts, which only HTC's launcher used, and the card face to `specific_weather_clock_4x2_forecast`. They're the `build_layouts.py`/`build_weather_change.py` layouts with the Desire's faces and panel; the digits are scaled up a little (`scaleX`/`scaleY`, nothing in the card clips them), and the flaps show the whole digit clipped at the hinge by a half-height frame, as there aren't enough spare drawables for separate halves.
 - **Smali:** `WeatherClock4x2ViewSingle.getLayout` returns `FlipStyle.layout4x2(getContext())` (it picked the `_for_5x5` layout when HTC's launcher reported more than four columns); `FlipDigits.apply` and `setAmPm` first map the digit or AM/PM image through `FlipStyle.digit` (the Desire's `flip_am`/`flip_pm` in 12-hour time).
 - Debug builds: `am broadcast -a com.htc.widget.weatherclock.RENDER_TEST -n com.htc.widget.weatherclock/.openmeteo.FlipClockTicker` draws the current design to `files/render.png`.
+
+### Sync loop fix (v1.2.10)
+
+- **HTC's sync requests no longer force a sync.** The HTC weather library asks for a sync (`TRIGGER_SYNC_SERVICE`) on every redraw while a row's `lastUpdate` is older than its auto-sync interval. `lastUpdate` is Breezy's refresh time, so when Breezy stopped refreshing (Xiaomi, Honor and others stop it in the background), sync → redraw → request → sync looped several times a second. The broadcasts piled up until the clock stalled and the launcher showed "Fix". `SyncReceiver` and `call()` now treat these requests like any other non-forced sync (at most one a minute); boot, time zone and location changes still force one, and Breezy pushes its own updates.
+
+### Weather video (v1.2.10)
+
+- **Setting "Weather animation"** (`BreezyWeather.animationVideo`): the Sense 3 scene, or HTC Weather's full-screen video for the conditions, as HD2's launcher plays it. It's used both for a weather tap and after unlocking. `WeatherAnim.VideoPlayer` is a TextureView with a muted, looping MediaPlayer, cropped to fill the screen (centred across, anchored at 35% of the height so the sun and moon stay), faded in on its first frame (no black flash), shown 5 s and faded out with the sound. A tap ends it, as with the Sense 3 scene.
+- **`build_videos.py`** re-encodes HTC Weather's 1080x1920 backdrop recordings (8 s seamless loops) to 720x1280 H.264 into `assets/weather_video/`, named as `NotificationCard.backdrop` names the scenes (12 MB for all 18), and adds `mp4` to `apktool.yml`'s `doNotCompress`, as `openFd` needs stored entries.
+
+### Animated weather icon (v1.2.10)
+
+- **`IconFx`**, modes in `breezy/icon_fx_mode`, applied on every redraw from `setupHint`:
+  - **HD2 style (after unlocking):** the icon grows in with the unlock flip (one push, so the launcher doesn't replay the flip), rain, snow, the sun's rays or lightning play over a "clean" copy of the icon without its own drops, flakes or bolt, then it fades into the static icon. The effects are HTC's Sense 3 textures laid out per icon (`IconFxTable`, generated). The sun or moon is drawn behind the clouds: `AnimScene` now sorts sprites far to near by depth every frame, the layer only breaking ties (HTC's scenes are 3D).
+  - **HD2 original:** HD2 launcher's own weather icon animation, played once by a ProgressBar whose indeterminate drawable is an animated WebP (`AnimatedImageDrawable`), then the static icon. It's added to the flip's own settle push, with no redraw of its own.
+  - **Always:** the effects loop without stopping (more battery).
+  - The icon is hidden when the screen goes off (`IconFx.prepare`), as the clock is, and waits up to 6 s for the unlock intro, so it doesn't show first and then grow in again. The handover back to the static icon is a full redraw (`trigger.weatherwidget`) with the flip's flaps hidden, because launchers re-apply every partial update since the last full one.
+- **`flipdown/build_icon_fx.py`** writes the effect textures, the clean icons and the HD2 clips into resource entries nothing in the widget uses (dangling xxxhdpi drawables, HTC's unused `raw/sound_*`, appcompat's `abc_*`), and the layout views (`add_to`, called by `build_weather_change.py` and `build_classic.py`). The icon block and its parents no longer clip their children (`unclip_sun`), so the effects can reach past the icon.
+- **`tools/hd2icon/`** renders the HD2 clips: `Hd2Icon.java` runs the HD2 launcher app's own icon renderer headless (`app_process` on an emulator or phone, by reflection) and `render.sh` encodes 2.5 s at 30 fps, 400 px, with the sides faded so the side clouds don't run into the temperature. As on HD2's home screen (0.8), the view has been running a while and the clouds that fly past the camera on first start are left out: the icon fades in at 0.28 of its size and grows to full size in 1.8 s. The HD2 app and its clips aren't in this repo.
+
+### Widget look and taps (v1.2.10)
+
+- **`WidgetLook`:** weather icon size (80–140 %, the `sun_block` resized with negative margins so nothing else moves) and forecast icon size (3 steps). `setViewLayoutWidth`/`Margin` need Android 12.
+- **Forecast row:** `build_weather_change.py`'s `fill_below` keeps the 5-day row centred in the space under the clock when the widget is stretched taller, instead of right under the temperature. Its icons are 40 dp (46 dp in the classic design, whose glass strip now follows the row).
+- **Tapping the date** opens the calendar only with **Tapping the date opens the calendar** on (on by default); off, the date does nothing. On some phones it opened Outlook as the default calendar.
+- **`ClockTap`:** with "Flip the clock", a tap on the clock flips both cards to the same time (`FlipAnimV3.flipNow`), with the flip click.
+- **Tap animation placement:** the Sense 3 scene can play full screen, and the widget's icon can be hidden while it plays, so the animation isn't drawn over the icon.
+- **Samsung (One UI):** the 4x2 widget's `minWidth` was HTC's `weather_clock_cell_size_width` (285 dp, 320 dp on wide screens), 5 columns for launchers that size widgets by `minWidth`; One UI's 4-column home screen then left the widget out of its list. `tools/widget_min_width.py` points it at HTC's `cell_size_4` (250 dp).
+- **Smali:** `FlipClockTicker` maps the AM/PM image through `FlipStyle.digit` (the minute tick set a different AM/PM image than the redraw, so AM/PM blinked); `WeatherBase.setClockClick` ends with `ClockTap.apply`.
 
 ### Startup ANR fix
 
@@ -208,12 +239,15 @@ To build it yourself:
    python3 source/flipdown/make_click.py apktool-project-breezy
    python3 source/flipdown/build_notification.py HTC-WeatherClock-10.10.1059527-android36-v1.2.6-breezy.apk com.htc.Weather_9.00.914774.apk apktool-project-breezy
    python3 source/flipdown/build_classic.py HTC-WeatherClock-10.10.1059527-android36-v1.2.6-breezy.apk HtcClockWidget.apk apktool-project-breezy
+   python3 source/flipdown/build_videos.py ffmpeg htc-weather-videos apktool-project-breezy
+   python3 source/flipdown/build_icon_fx.py assets HTC-WeatherClock-10.10.1059527-android36-v1.2.9-breezy.apk apktool-project-breezy <Sense 3 textures> source/breezybridge/src/com/htc/widget/weatherclock/openmeteo
+   python3 source/tools/widget_min_width.py apktool-project-breezy
    ```
-   `build_notification.py` needs the HTC Weather app's APK (9.00) for its backdrops, and `build_classic.py` the Desire HD's `HtcClockWidget.apk` (from `system.img` of its 1.32.405.6 ROM).
+   `build_notification.py` needs the HTC Weather app's APK (9.00) for its backdrops, and `build_classic.py` the Desire HD's `HtcClockWidget.apk` (from `system.img` of its 1.32.405.6 ROM). `build_videos.py` needs ffmpeg and HTC Weather's backdrop recordings (`weather_<scene>.mp4`). `build_icon_fx.py` needs the Sense 3 textures decoded from `shared.m10` (see [ANIMATIONS.md](ANIMATIONS.md)), OpenCV and the HD2 clips from `tools/hd2icon/render.sh` in `hd2_icon_clips/`.
    The manifest is generated by the build script (`tools/breezy_manifest.py` from the 1.2.4 project's manifest).
 5. **Build:**
    ```sh
-   ./build-breezy.sh      # → ../HTC-WeatherClock-v1.2.8-breezy.apk (--debug: test hooks kept, *-debug.apk)
+   ./build-breezy.sh      # → ../HTC-WeatherClock-v1.2.10-breezy.apk (--debug: test hooks kept, *-debug.apk)
    ```
    `breezybridge/src` is compiled into `classes3.dex`. `breezybridge/stubs` are compile-only stand-ins for the smali classes the Java code calls; they aren't dexed. The APK is signed with uber-apk-signer's debug key, the same key as the earlier builds, so it installs over them.
 

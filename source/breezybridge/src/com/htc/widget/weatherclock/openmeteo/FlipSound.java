@@ -82,6 +82,18 @@ final class FlipSound {
         }, CHECK_MS);
     }
 
+    /** The clock was tapped and flips (FlipAnimV3.flipNow): both cards at once. */
+    static void tap(Context context) {
+        final Context app = context.getApplicationContext() != null ? context.getApplicationContext() : context;
+        if (!enabled(app)) return;
+        load(app);
+        AudioManager am = (AudioManager) app.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null || am.getRingerMode() != AudioManager.RINGER_MODE_NORMAL) return;
+        final Handler h = new Handler(Looper.getMainLooper());
+        h.postDelayed(() -> click(0.8f), 120);
+        h.postDelayed(() -> click(0.6f), 160);
+    }
+
     private static void click(float volume) {
         SoundPool p = sPool;
         if (p != null && sLoaded) p.play(sClick, volume, volume, 1, 0, 1f);

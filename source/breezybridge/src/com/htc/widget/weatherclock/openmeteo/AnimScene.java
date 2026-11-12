@@ -178,6 +178,8 @@ final class AnimScene {
         // Lower layers are drawn first; ties keep the scene's own order.
         Collections.sort(order, (a, b) -> a[0] != b[0] ? Long.compare(a[0], b[0]) : Long.compare(a[1], b[1]));
         drawOrder = new int[order.size()];
+        sorted = new int[order.size()];
+        depth = new float[n];
         for (int i = 0; i < drawOrder.length; i++) drawOrder[i] = (int) order.get(i)[1];
     }
 
@@ -215,9 +217,23 @@ final class AnimScene {
             local(val, world[i]);
             if (p >= 0) compose(world[p], world[i]);
         }
-        float cx = width / 2f, cy = height / 2f;
+        // Far to near, as HTC's renderer: the layer numbers only order sprites within their group (a moon of layer
+        // 3 behind clouds of layer 1 further forward), so by depth first (the sprite's centre), then layer.
+        int count = 0;
         for (int i : drawOrder) {
             if (!active[i]) continue;
+            float[] w = world[i];
+            depth[i] = w[8] * sw[i] / 2 + w[9] * sh[i] / 2 + w[11];
+            int j = count++;
+            while (j > 0 && depth[sorted[j - 1]] > depth[i] + 0.01f) {  // stable: drawOrder keeps layer order on ties
+                sorted[j] = sorted[j - 1];
+                j--;
+            }
+            sorted[j] = i;
+        }
+        float cx = width / 2f, cy = height / 2f;
+        for (int q = 0; q < count; q++) {
+            int i = sorted[q];
             float a = opac[i] * alphaMul[i] * fade;
             if (a <= 0.002f) continue;
             float[] m = world[i];
@@ -273,4 +289,6 @@ final class AnimScene {
     }
 
     private final float[] tmp = new float[12];
+    private int[] sorted;
+    private float[] depth;
 }

@@ -171,8 +171,40 @@ public class WeatherSettingsActivity extends Activity {
             WidgetForecast.setEnabled(this, on);
             OpenMeteoBridge.requestSync(this, true);  // redraws the widgets
         }));
+        mList.addView(label("Animated weather icon (as on HTC HD2)"));
+        int[] fxModes = {IconFx.OFF, IconFx.AFTER_UNLOCK, IconFx.HD2_ORIGINAL, IconFx.ALWAYS};
+        int fxAt = 0;
+        for (int k = 0; k < fxModes.length; k++) if (fxModes[k] == IconFx.mode(this)) fxAt = k;
+        mList.addView(radios(new String[]{"Off",
+                "After unlocking, HD2 style: it grows in, rain or snow falls for a few seconds, then it settles",
+                "HD2 original: HD2's own weather icon and its animations; after unlocking (and when the weather "
+                        + "changes) it fades in and grows to its place, then rain, snow or lightning starts",
+                "Always: rain, snow, the sun's rays and lightning never stop (uses a little more battery)"}, fxAt, i -> {
+            IconFx.setMode(this, fxModes[i]);
+            OpenMeteoBridge.requestSync(this, true);
+        }));
+        mList.addView(label("Weather icon size"));
+        int iconAt = java.util.Arrays.binarySearch(WidgetLook.ICON_SIZES, WidgetLook.iconSize(this));
+        mList.addView(radios(new String[]{"Small", "Normal", "Large", "Extra large"}, iconAt < 0 ? 1 : iconAt, i -> {
+            WidgetLook.setIconSize(this, WidgetLook.ICON_SIZES[i]);
+            OpenMeteoBridge.requestSync(this, true);
+        }));
+        mList.addView(label("Forecast icon size"));
+        mList.addView(radios(new String[]{"Small", "Medium", "Large"}, WidgetLook.forecastIcons(this), i -> {
+            WidgetLook.setForecastIcons(this, i);
+            OpenMeteoBridge.requestSync(this, true);
+        }));
+        if (Build.VERSION.SDK_INT < 31) {
+            TextView old = text("The icon sizes need Android 12 or later.", 13, false);
+            old.setAlpha(0.7f);
+            mList.addView(old);
+        }
         mList.addView(toggle("Show weather alerts in place of the date", BreezyWeather.alertsOnWidget(this), on -> {
             BreezyWeather.setAlertsOnWidget(this, on);
+            OpenMeteoBridge.requestSync(this, true);
+        }));
+        mList.addView(toggle("Tapping the date opens the calendar", BreezyWeather.dateOpensCalendar(this), on -> {
+            BreezyWeather.setDateOpensCalendar(this, on);
             OpenMeteoBridge.requestSync(this, true);
         }));
         mList.addView(toggle("Weather in notifications (also on the lock screen)", WeatherNotification.enabled(this), on -> {
@@ -194,10 +226,26 @@ public class WeatherSettingsActivity extends Activity {
         mList.addView(radios(new String[]{"Play the Sense weather animation", "Play the animation, then show the forecast",
                 "Open Breezy Weather"}, mode == BreezyWeather.TAP_BREEZY ? 2 : mode == BreezyWeather.TAP_ANIMATION_FORECAST ? 1 : 0,
                 i -> BreezyWeather.setTapMode(this, modes[i])));
+
+        header("Tapping the clock");
+        mList.addView(radios(new String[]{"Open the alarm clock", "Flip the clock (as on HTC Sense)"},
+                ClockTap.flips(this) ? 1 : 0, i -> {
+            ClockTap.setFlips(this, i == 1);
+            OpenMeteoBridge.requestSync(this, true);
+        }));
+
+        header("Weather animation");
+        mList.addView(radios(new String[]{"Sense 3 (over the home screen)", "HTC Weather video (full screen)"},
+                BreezyWeather.animationVideo(this) ? 1 : 0, i -> BreezyWeather.setAnimationVideo(this, i == 1)));
+        mList.addView(label("Animation size (Sense 3 animation)"));
+        mList.addView(radios(new String[]{"Grows out of the weather icon (as on Sense 3)", "Full screen (as on HD2)"},
+                WidgetLook.animFullScreen(this) ? 1 : 0, i -> WidgetLook.setAnimFullScreen(this, i == 1)));
+        mList.addView(toggle("Hide the widget's weather icon while the animation plays", WidgetLook.hideIcon(this),
+                on -> WidgetLook.setHideIcon(this, on)));
         mList.addView(toggle("Animation sound (when the ringer is on)", BreezyWeather.animationSound(this),
                 on -> BreezyWeather.setAnimationSound(this, on)));
-        TextView hint = text("Tapping the temperature always opens Breezy Weather. Tapping the clock opens the "
-                + "alarm clock, and the date the calendar.", 13, false);
+        TextView hint = text("Tapping the temperature always opens Breezy Weather. The animation after unlocking "
+                + "starts from where the weather icon was last tapped.", 13, false);
         hint.setAlpha(0.7f);
         hint.setPadding(0, dp(6), 0, 0);
         mList.addView(hint);
@@ -314,6 +362,13 @@ public class WeatherSettingsActivity extends Activity {
         t.setTextColor(mAccent);
         t.setPadding(0, dp(28), 0, dp(6));
         mList.addView(t);
+    }
+
+    /** A small heading over a group of choices. */
+    private TextView label(String s) {
+        TextView t = text(s, 14, true);
+        t.setPadding(0, dp(10), 0, 0);
+        return t;
     }
 
     private TextView text(String s, int sp, boolean bold) {

@@ -165,6 +165,15 @@ public final class BreezyWeather {
         prefs(ctx).edit().putBoolean("animation_sound", on).apply();
     }
 
+    /** The weather animation as HTC Weather's full-screen video instead of the Sense 3 scene. */
+    static boolean animationVideo(Context ctx) {
+        return prefs(ctx).getBoolean("animation_video", false);
+    }
+
+    static void setAnimationVideo(Context ctx, boolean on) {
+        prefs(ctx).edit().putBoolean("animation_video", on).apply();
+    }
+
     /** What the last sync showed, for the settings screen. */
     static void setLastSync(Context ctx, String summary) {
         prefs(ctx).edit().putLong("last_sync", System.currentTimeMillis()).putString("last_summary", summary).apply();
@@ -196,15 +205,18 @@ public final class BreezyWeather {
      */
     public static void setupHint(Context ctx, android.widget.RemoteViews rv) {
         try {
+            WidgetLook.apply(ctx, rv);
             State s = quickState(ctx);
             if (s == State.READY) {
                 WeatherChange.apply(ctx, rv);
                 alertLine(ctx, rv);
                 dateClick(ctx, rv);
                 WidgetForecast.apply(ctx, rv);
+                IconFx.apply(ctx, rv);
                 return;
             }
             WidgetForecast.apply(ctx, rv);  // hidden: no weather to show
+            IconFx.apply(ctx, rv);
             String pkg = ctx.getPackageName();
             int date = ctx.getResources().getIdentifier("week_date", "id", pkg);
             int block = ctx.getResources().getIdentifier("temp_info_block", "id", pkg);
@@ -222,11 +234,15 @@ public final class BreezyWeather {
         }
     }
 
-    /** Tapping the date opens the calendar on today, or Breezy while the line shows an alert. */
+    /** Tapping the date opens the calendar on today (unless turned off), or Breezy while the line shows an alert. */
     private static void dateClick(Context ctx, android.widget.RemoteViews rv) {
         int date = ctx.getResources().getIdentifier("week_date", "id", ctx.getPackageName());
         if (date == 0) return;
         boolean alert = alertsOnWidget(ctx) && topAlert(ctx) != null;
+        if (!alert && !dateOpensCalendar(ctx)) {
+            rv.setOnClickPendingIntent(date, null);
+            return;
+        }
         Intent i = alert ? ctx.getPackageManager().getLaunchIntentForPackage(PKG)
                 : new Intent().setClassName(ctx, "com.htc.widget.weatherclock.openmeteo.CalendarTapActivity");
         if (i == null) return;
@@ -310,6 +326,15 @@ public final class BreezyWeather {
             if (o != null && (o.optLong("end", 0) == 0 || o.optLong("end") > now)) return o;
         }
         return null;
+    }
+
+    /** "Tapping the date opens the calendar" (on by default); off, the date does nothing. */
+    static boolean dateOpensCalendar(Context ctx) {
+        return prefs(ctx).getBoolean("date_opens_calendar", true);
+    }
+
+    static void setDateOpensCalendar(Context ctx, boolean on) {
+        prefs(ctx).edit().putBoolean("date_opens_calendar", on).apply();
     }
 
     static boolean alertsOnWidget(Context ctx) {

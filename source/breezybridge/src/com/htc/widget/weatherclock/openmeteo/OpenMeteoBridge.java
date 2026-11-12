@@ -207,9 +207,11 @@ public class OpenMeteoBridge extends ContentProvider {
         Bundle out = new Bundle();
         if ("METHOD_LOCATION_LIST_EXIST".equals(method)) {
             out.putBoolean("KEY_LOCATION_LIST_EXIST", true);
-        } else if ("METHOD_DOWNLOAD_LOCATION_LIST".equals(method) || "METHOD_ENABLE_DOWNLOAD_LOCATION_LIST".equals(method)
-                || "com.htc.sync.provider.weather.TRIGGER_SYNC_SERVICE".equals(method)) {
+        } else if ("METHOD_DOWNLOAD_LOCATION_LIST".equals(method) || "METHOD_ENABLE_DOWNLOAD_LOCATION_LIST".equals(method)) {
             requestSync(getContext(), true);
+            out.putInt("status", 1);
+        } else if ("com.htc.sync.provider.weather.TRIGGER_SYNC_SERVICE".equals(method)) {
+            requestSync(getContext());  // see SyncReceiver
             out.putInt("status", 1);
         }
         return out;
@@ -219,7 +221,14 @@ public class OpenMeteoBridge extends ContentProvider {
     public static class SyncReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            requestSync(context, true);
+            String action = intent == null ? null : intent.getAction();
+            // The HTC library asks for a sync on every redraw while lastUpdate is older than its sync interval,
+            // which it stays for as long as Breezy hasn't refreshed. Forcing those made sync -> redraw -> sync
+            // loop a few times a second, until the backlog stalled the clock and the launcher gave up on the
+            // widget. Breezy pushes its own updates, so these wait out MIN_SYNC_INTERVAL_MS.
+            boolean htcRequest = "com.htc.sync.provider.weather.TRIGGER_SYNC_SERVICE".equals(action)
+                    || "com.htc.sync.provider.weather.SyncService".equals(action);
+            requestSync(context, !htcRequest);
         }
     }
 

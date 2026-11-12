@@ -67,6 +67,8 @@ final class ClockLog {
                 cascadeTest(ctx);
             } else if ("RENDER_TEST".equals(what)) {
                 what += " " + renderTest(ctx);
+            } else if ("ICON_TEST".equals(what)) {
+                IconFx.intro(ctx);
             } else if ("RAIN_TEST".equals(what)) {
                 RainWarning.test(ctx);
             }
@@ -162,20 +164,45 @@ final class ClockLog {
                     res.getIdentifier(FlipStyle.digitName(0, "_top"), "drawable", pkg));
             rv.setImageViewResource(res.getIdentifier("minute_flap_units_top", "id", pkg),
                     res.getIdentifier(FlipStyle.digitName(7, "_top"), "drawable", pkg));
-            android.widget.FrameLayout parent = new android.widget.FrameLayout(ctx);
-            android.view.View v = rv.apply(ctx, parent);
-            int w = Math.round(380 * res.getDisplayMetrics().density), h = Math.round(220 * res.getDisplayMetrics().density);
-            v.measure(android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY),
-                    android.view.View.MeasureSpec.makeMeasureSpec(h, android.view.View.MeasureSpec.EXACTLY));
-            v.layout(0, 0, w, h);
-            android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
-            b.eraseColor(0xff3a4a5a);
-            v.draw(new android.graphics.Canvas(b));
-            java.io.File f = new java.io.File(ctx.getFilesDir(), "render.png");
-            try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) {
-                b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out);
+            rv.setImageViewResource(res.getIdentifier("sun", "id", pkg),
+                    com.htc.widget.weatherclock.util.LocalStateResources.getConditionResourceId_Color(1));
+            WidgetLook.apply(ctx, rv);
+            int row = res.getIdentifier("forecast_row", "id", pkg);
+            if (row != 0 && WidgetForecast.fill(ctx, rv, BreezyWeather.mainRow(ctx))) rv.setViewVisibility(row, 0);
+            java.io.File f = null;
+            for (int hdp : new int[]{220, 330, 400}) {
+                android.widget.FrameLayout parent = new android.widget.FrameLayout(ctx);
+                android.view.View v = rv.apply(ctx, parent);
+                int w = Math.round(380 * res.getDisplayMetrics().density), h = Math.round(hdp * res.getDisplayMetrics().density);
+                v.measure(android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY),
+                        android.view.View.MeasureSpec.makeMeasureSpec(h, android.view.View.MeasureSpec.EXACTLY));
+                v.layout(0, 0, w, h);
+                android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+                b.eraseColor(0xff3a4a5a);
+                v.draw(new android.graphics.Canvas(b));
+                f = new java.io.File(ctx.getFilesDir(), hdp == 220 ? "render.png" : "render_" + hdp + ".png");
+                try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) {
+                    b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out);
+                }
             }
-            return "ok " + f;
+            android.view.View pv = rv.apply(ctx, new android.widget.FrameLayout(ctx));
+            int pw = Math.round(380 * res.getDisplayMetrics().density), ph = Math.round(400 * res.getDisplayMetrics().density);
+            pv.measure(android.view.View.MeasureSpec.makeMeasureSpec(pw, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(ph, android.view.View.MeasureSpec.EXACTLY));
+            pv.layout(0, 0, pw, ph);
+            android.view.View probe = pv.findViewById(res.getIdentifier("fc_temp_0", "id", pkg));
+            StringBuilder geo = new StringBuilder();
+            for (android.view.View g = probe; g != null && g != pv; g = (android.view.View) g.getParent()) {
+                geo.append(g.getClass().getSimpleName()).append('@').append(g.getTop()).append('+').append(g.getHeight()).append(' ');
+            }
+            android.view.ViewGroup fr = (android.view.ViewGroup) pv.findViewById(row).getParent();
+            for (int k = 0; k < ((android.view.ViewGroup) pv.findViewById(row)).getChildCount(); k++) {
+                android.view.View g = ((android.view.ViewGroup) pv.findViewById(row)).getChildAt(k);
+                geo.append("child").append(k).append('@').append(g.getTop()).append('+').append(g.getHeight()).append(' ');
+            }
+            geo.append("wrapper@").append(fr.getTop()).append('+').append(fr.getHeight()).append(" d=").append(res.getDisplayMetrics().density);
+            String t = probe instanceof android.widget.TextView ? "\"" + ((android.widget.TextView) probe).getText() + "\"" : "none";
+            return "ok " + f + " fc_temp_0=" + t + " " + geo;
         } catch (Throwable th) {
             String s = android.util.Log.getStackTraceString(th);
             return s.length() > 2000 ? s.substring(0, 2000) : s;

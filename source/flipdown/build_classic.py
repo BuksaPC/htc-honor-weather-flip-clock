@@ -136,8 +136,8 @@ SUN = [("scaleX", "1.2"), ("scaleY", "1.2"), ("translationY", "18dp")]
 
 # HTC's weather gadget of that time: the glass is a shorter strip behind the temperatures and the day names, and
 # the icons stand half above it.
-FC_ICON = "40dp"
-FC_GLASS_TOP = "20dp"
+FC_ICON = "46dp"
+FC_GLASS_TOP = "23dp"
 
 
 def forecast_row():
@@ -156,12 +156,17 @@ def forecast_row():
         day[1] = [(k, "11sp" if k == "textSize" else v) for k, v in day[1] if k != "textStyle"] + [
             ("layout_marginTop", "1dp")]
         col[2] = [icon, temp, day]
+    # The glass is pinned to the day columns (a spare appcompat id): as a match_parent child of a wrap_content
+    # frame, its picture's own height (~200dp) made the row that tall, with empty glass below the days.
+    days_id = "@id/action_mode_close_button"
     glass_strip = ["ImageView", [("src", "@drawable/" + ART[PANEL]), ("scaleType", "fitXY"),
-                                 ("layout_width", "match_parent"), ("layout_height", "match_parent"),
+                                 ("layout_width", "match_parent"), ("layout_height", "wrap_content"),
+                                 ("layout_alignTop", days_id), ("layout_alignBottom", days_id),
                                  ("layout_marginTop", FC_GLASS_TOP)], [], 0]
-    days = ["LinearLayout", inner_attrs + [("layout_width", "match_parent"), ("layout_height", "wrap_content"),
-                                           ("paddingBottom", "5dp")], row[2], 0]
-    return ["FrameLayout", frame_attrs, [glass_strip, days], 0]
+    days = ["LinearLayout", [("id", days_id)] + inner_attrs + [("layout_width", "match_parent"),
+                                                              ("layout_height", "wrap_content"), ("paddingBottom", "5dp")],
+            row[2], 0]
+    return ["RelativeLayout", frame_attrs, [glass_strip, days], 0]
 
 
 def big_sun(root):
@@ -251,7 +256,10 @@ def layouts(apk):
     glass(root)
     big_sun(root)
     bwc.wrap(root, "sun", bwc.ICON_FLIP, bwc.ICON_IMG)
-    root[2].append(forecast_row())
+    root[2].append(bwc.fill_below(forecast_row()))
+    bwc.unclip_sun(root)
+    import build_icon_fx
+    build_icon_fx.add_to(root)
     out[LAYOUTS["root"]] = swap_includes(root, {
         "@layout/specific_weather_clock_4x2_digital": "@layout/" + LAYOUTS["digital"]})
     return {name: swap_values(node) for name, node in out.items()}
@@ -316,6 +324,9 @@ def main():
         elif typ == "layout":
             if name not in sources:
                 open(f"{work}/res/layout/{name}.xml", "w").write(f'<merge xmlns:android="{bl.NS}" />\n')
+        elif typ == "raw":  # the icon's Sense 3 clips: only their IDs matter here
+            os.makedirs(f"{work}/res/raw", exist_ok=True)
+            open(f"{work}/res/raw/{name}.flac", "wb").write(b"\0")
         elif typ == "anim":
             open(f"{work}/res/anim/{name}.xml", "w").write(
                 f'<alpha xmlns:android="{bl.NS}" android:fromAlpha="1" android:toAlpha="1" />\n')
