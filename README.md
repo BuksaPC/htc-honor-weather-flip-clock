@@ -7,7 +7,7 @@ The classic **HTC Sense flip clock and weather widget** for modern Android, with
 
 | | |
 |---|---|
-| **Latest release** | **v1.2.12-breezy**: `HTC-WeatherClock-10.10.1059527-android36-v1.2.12-breezy.apk` ([Releases](https://github.com/BuksaPC/htc-honor-weather-flip-clock/releases)) |
+| **Latest release** | **v1.2.13-breezy**: `HTC-WeatherClock-10.10.1059527-android36-v1.2.13-breezy.apk` ([Releases](https://github.com/BuksaPC/htc-honor-weather-flip-clock/releases)) |
 | **Needs** | Android 7.0+ and Breezy Weather ([F-Droid](https://f-droid.org/packages/org.breezyweather/) or [GitHub](https://github.com/breezy-weather/breezy-weather/releases)) |
 | **Root / adb** | Not needed |
 | **Internet permission** | None. Breezy fetches the weather; the widget only reads what Breezy shares on the phone |
@@ -72,7 +72,15 @@ Updating from the **Honor edition** (v1.2.3-honor)? Install over it. The `adb ap
 - **HTC's flip clock, as on Sense 3:** the flap folds down at the hinge and the new half drops into place, with HTC's own motion and timing (0.67 s per flip). On unlock the hour flips once and the minute twice, as on Sense. The home screen plays the animation itself, so it stays smooth.
 - **Unchanged:** the date line, calendar events and themes.
 
-## What's new in v1.2.12-breezy
+## What's new in v1.2.13-breezy
+
+See [release-notes-v1.2.13-breezy.md](release-notes-v1.2.13-breezy.md). A fix release:
+
+- **Widget not showing on Samsung (One UI, Android 17):** fixed and confirmed on a Galaxy S26 Ultra.
+- **Add the widget to the home screen** button (widget settings → Troubleshooting, and Unlock & battery check), for home screens that don't finish placing it.
+- **Unlock & battery check** now lists each widget's size and updates, with **Redraw widgets**.
+
+## v1.2.12-breezy
 
 See [release-notes-v1.2.12-breezy.md](release-notes-v1.2.12-breezy.md). A fix release:
 
@@ -174,6 +182,7 @@ Full technical write-up: **[BREEZY.md](BREEZY.md)** (Breezy edition) and **[ANIM
 
 ## Previous releases
 
+- **v1.2.12-breezy:** date opens the calendar, not Outlook. Superseded by v1.2.13-breezy (widget shows on Samsung One UI).
 - **v1.2.11-breezy:** double unlock flip fixed. Superseded by v1.2.12-breezy (date opens the calendar, not Outlook).
 - **v1.2.10-breezy:** animated HD2 weather icon, new settings, Samsung fix. Superseded by v1.2.11-breezy (double unlock flip fixed).
 - **v1.2.9-breezy:** classic Desire design, unlock flip fixes. Superseded by v1.2.10-breezy (animated HD2 weather icon, new settings, Samsung fix).
