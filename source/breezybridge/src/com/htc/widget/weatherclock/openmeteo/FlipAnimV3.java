@@ -47,6 +47,8 @@ final class FlipAnimV3 {
     private static final long UNLOCK_HOLD_MS = 3000;
     /** The weather icon's handover (IconFx), added to the update that puts the flaps away (settle). */
     private static volatile IconFx.Handover sIconHandover;
+    /** The unlock flip is waiting for the launcher to show (introWhenHome): it brings the icon's grow-in. */
+    private static volatile boolean sUnlockPending;
     /** How long after screen-on a set-back still waits for the unlock flip before the ticker may repaint. */
     private static final long PREPARED_HOLD_MS = 5000;
     /** At most this long for the panel to go off after the screen stopped being interactive. */
@@ -297,6 +299,7 @@ final class FlipAnimV3 {
         sScreenOn = false;
         sIntroDone = false;
         sIconIntroDone = false;
+        sUnlockPending = false;
         WeatherAnim.stopOverlay();
         if (FlipStyle.useV3(app) && FlipStyle.unlockFlip(app) && setBack(app)) {
             prepare(app);
@@ -321,11 +324,14 @@ final class FlipAnimV3 {
         boolean flip = beginIntro(app, sawLock);
         if (flip) {
             sPlaying = true;  // the ticker keeps off until the flip is pushed
+            sUnlockPending = true;
             introWhenHome(app, SystemClock.elapsedRealtime());  // the icon's grow-in goes with it
         } else if (sPrepared && !sPlaying) {
             restore(app);
         }
-        if (!flip && !sIconIntroDone && IconFx.enabled(app)) {
+        // Not while the unlock flip is on its way (unlocked() again, from another watcher, before it's sent):
+        // the flip's update brings the icon's grow-in; a separate one would make the launcher replay the flip.
+        if (!flip && !sUnlockPending && !sIconIntroDone && IconFx.enabled(app)) {
             sIconIntroDone = true;
             if (sawLock || SystemClock.elapsedRealtime() - sScreenOnAt < 60000) {
                 iconIntroWhenHome(app, SystemClock.elapsedRealtime());
@@ -369,6 +375,7 @@ final class FlipAnimV3 {
                 if (!isScreenOn(app) || locked(app)) {
                     sPlaying = false;  // locked again first: the next unlock flips (the cards stay set back)
                     sIntroDone = false;
+                    sUnlockPending = false;
                     return;
                 }
                 if (SystemClock.elapsedRealtime() - since < INTRO_WAIT_MS && UnlockWeather.hasUsageAccess(app)
@@ -376,6 +383,7 @@ final class FlipAnimV3 {
                     sHandler.postDelayed(this, 100);
                     return;
                 }
+                sUnlockPending = false;
                 intro(app, null);
             }
         }, INTRO_DELAY_MS);
