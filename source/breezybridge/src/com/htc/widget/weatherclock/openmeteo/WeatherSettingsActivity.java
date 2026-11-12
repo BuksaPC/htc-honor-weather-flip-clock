@@ -94,6 +94,9 @@ public class WeatherSettingsActivity extends Activity {
         city.putInt(KEY_TYPE, type);
         city.putInt("appWidgetId", id);
         Intent result = new Intent().putExtra("appWidgetId", id);
+        android.content.ComponentName caller = getCallingActivity();
+        ClockLog.tick(this, "SETTINGS #" + id + " type " + type + " from "
+                + (caller != null ? caller.flattenToShortString() : "no caller"));
         if (id != 0) {
             try {
                 WidgetUtils.updateWidgetOptions(this, city, id, type);
@@ -264,6 +267,9 @@ public class WeatherSettingsActivity extends Activity {
         mList.addView(mRestricted);
         mCheck = button("Unlock & battery check", v -> startActivity(new Intent(this, DiagnosticsActivity.class)));
         mList.addView(mCheck);
+        if (PinWidget.supported(this)) {
+            mList.addView(button("Add the widget to the home screen", v -> PinWidget.request(this)));
+        }
         mList.addView(toggle("Debug log (for bug reports)", ClockLog.enabled(this), on -> ClockLog.setEnabled(this, on)));
         TextView log = text("Writes every clock tick, screen change and flip to Android/data/"
                 + "com.htc.widget.weatherclock/files/clock_ticks.txt. Leave it off otherwise: it writes every minute.",

@@ -67,7 +67,7 @@ set_bool(a.find('application')[0], 'allowBackup', False)
 
 # Package visibility for Breezy (the Honor edition's entry), and the version name.
 rename('com.hihonor.android.totemweather', 'org.breezyweather')
-rename('10.10.1059527-android36-v1.2.4', '10.10.1059527-android36-v1.2.12-diag-breezy')
+rename('10.10.1059527-android36-v1.2.4', '10.10.1059527-android36-v1.2.12-diag2-breezy')
 
 perm = a.element('uses-permission', [('name', 'org.breezyweather.READ_PROVIDER')])
 last = a.find('uses-permission')[-1]
@@ -109,6 +109,9 @@ a.insert_before_end(a.find('application')[0], upd)
 # "Tapping the clock: flip it" (ClockTap), a broadcast from the widget's own PendingIntent.
 tap = a.element('receiver', [('name', OPENMETEO + 'ClockTap'), ('exported', False)])
 a.insert_before_end(a.find('application')[0], tap)
+# "Add the widget to the home screen" (PinWidget): the launcher's callback once it placed the widget.
+pin = a.element('receiver', [('name', OPENMETEO + 'PinWidget'), ('exported', False)])
+a.insert_before_end(a.find('application')[0], pin)
 diag = a.element('activity', [('name', OPENMETEO + 'DiagnosticsActivity'), ('exported', False)])
 a.insert_before_end(a.find('application')[0], diag)
 

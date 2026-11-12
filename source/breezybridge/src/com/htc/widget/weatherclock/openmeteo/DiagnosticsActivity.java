@@ -135,6 +135,9 @@ public class DiagnosticsActivity extends Activity {
             Toast.makeText(this, "Redrawing…", Toast.LENGTH_SHORT).show();
             mWidgets.postDelayed(this::refresh, 2500);
         }));
+        if (PinWidget.supported(this)) {
+            mList.addView(button("Add the widget to the home screen", v -> PinWidget.request(this)));
+        }
 
         header("Recent clock events");
         TextView how = text(13);
